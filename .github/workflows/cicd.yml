@@ -60,7 +60,7 @@ jobs:
       - name: Build and push
         id: build
         run: |
-          IMAGE=${{ secrets.DOCKER_REGISTRY }}/${{ secrets.REGISTRY_PROJECT }}/ticketrush-event-api:latest
+          IMAGE=${{ secrets.DOCKER_REGISTRY }}/${{ secrets.REGISTRY_PROJECT }}/ticketrush-event_api:latest
 
           echo "image=$IMAGE" >> $GITHUB_OUTPUT
 
@@ -78,7 +78,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            IMAGE=${{ secrets.DOCKER_REGISTRY }}/${{ secrets.REGISTRY_PROJECT }}/ticketrush-event-api:latest
+            IMAGE=${{ secrets.DOCKER_REGISTRY }}/${{ secrets.REGISTRY_PROJECT }}/ticketrush-event_api:latest
 
             echo "Deploying $IMAGE"
 
