@@ -107,6 +107,8 @@ jobs:
 
             cd ${{ secrets.DEPLOY_PATH }}
 
+            export EVENT_API_TAG=${{ github.sha }}
+
             docker pull $IMAGE
 
             docker compose up -d event_api
