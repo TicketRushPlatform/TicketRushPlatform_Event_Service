@@ -4,6 +4,7 @@ import (
 	"errors"
 	"event_service/internal/apperror"
 	"event_service/internal/dto"
+	"event_service/internal/middleware"
 	"event_service/internal/services"
 	"net/http"
 
@@ -27,13 +28,13 @@ func NewEventHandler(service services.EventService, logger *zap.Logger) *EventHa
 func (h *EventHandler) RegisterRoutes(rg *gin.RouterGroup) {
 	events := rg.Group("/events")
 	{
-		events.POST("", h.CreateEvent)
+		events.POST("", middleware.RequireAnyRole("EVENT_OWNER", "ADMIN"), h.CreateEvent)
 		events.GET("", h.ListEvents)
 		events.GET("/:id", h.GetEvent)
 		events.GET("/:id/showtimes", h.ListShowtimesByEvent)
-		events.PUT("/:id/showtimes", h.ReplaceEventShowtimes)
-		events.PUT("/:id", h.UpdateEvent)
-		events.DELETE("/:id", h.DeleteEvent)
+		events.PUT("/:id/showtimes", middleware.RequireAnyRole("EVENT_OWNER", "ADMIN"), h.ReplaceEventShowtimes)
+		events.PUT("/:id", middleware.RequireAnyRole("EVENT_OWNER", "ADMIN"), h.UpdateEvent)
+		events.DELETE("/:id", middleware.RequireAnyRole("EVENT_OWNER", "ADMIN"), h.DeleteEvent)
 	}
 
 	showtimes := rg.Group("/showtimes")

@@ -17,14 +17,14 @@ import (
 )
 
 type eventServiceMock struct {
-	createFn func(req dto.CreateEventRequest) (*dto.EventResponse, error)
-	getFn    func(eventID uuid.UUID) (*dto.EventResponse, error)
-	getShowtimeFn func(showtimeID uuid.UUID) (*dto.ShowtimeResponse, error)
-	listShowtimesFn func(eventID uuid.UUID) ([]dto.ShowtimeResponse, error)
+	createFn           func(req dto.CreateEventRequest) (*dto.EventResponse, error)
+	getFn              func(eventID uuid.UUID) (*dto.EventResponse, error)
+	getShowtimeFn      func(showtimeID uuid.UUID) (*dto.ShowtimeResponse, error)
+	listShowtimesFn    func(eventID uuid.UUID) ([]dto.ShowtimeResponse, error)
 	replaceShowtimesFn func(eventID uuid.UUID, showtimes []dto.UpsertShowtimeRequest) ([]dto.ShowtimeResponse, error)
-	listFn   func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error)
-	updateFn func(eventID uuid.UUID, req dto.UpdateEventRequest) (*dto.EventResponse, error)
-	deleteFn func(eventID uuid.UUID) error
+	listFn             func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error)
+	updateFn           func(eventID uuid.UUID, req dto.UpdateEventRequest) (*dto.EventResponse, error)
+	deleteFn           func(eventID uuid.UUID) error
 }
 
 func (m *eventServiceMock) CreateEvent(req dto.CreateEventRequest) (*dto.EventResponse, error) {
@@ -75,10 +75,12 @@ func TestEventHandlerRoutes(t *testing.T) {
 	}
 
 	mock := &eventServiceMock{
-		createFn: func(req dto.CreateEventRequest) (*dto.EventResponse, error) { return res, nil },
-		getFn:    func(eventID uuid.UUID) (*dto.EventResponse, error) { return res, nil },
+		createFn:      func(req dto.CreateEventRequest) (*dto.EventResponse, error) { return res, nil },
+		getFn:         func(eventID uuid.UUID) (*dto.EventResponse, error) { return res, nil },
 		getShowtimeFn: func(showtimeID uuid.UUID) (*dto.ShowtimeResponse, error) { return showtimeRes, nil },
-		listShowtimesFn: func(eventID uuid.UUID) ([]dto.ShowtimeResponse, error) { return []dto.ShowtimeResponse{*showtimeRes}, nil },
+		listShowtimesFn: func(eventID uuid.UUID) ([]dto.ShowtimeResponse, error) {
+			return []dto.ShowtimeResponse{*showtimeRes}, nil
+		},
 		listFn: func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error) {
 			return []dto.EventResponse{*res}, 1, 1, nil
 		},
@@ -88,6 +90,10 @@ func TestEventHandlerRoutes(t *testing.T) {
 
 	h := NewEventHandler(mock, zap.NewNop())
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("auth_role", "ADMIN")
+		c.Next()
+	})
 	v1 := r.Group("/api/v1")
 	h.RegisterRoutes(v1)
 
@@ -303,6 +309,10 @@ func TestEventHandlerErrorPaths(t *testing.T) {
 
 			h := NewEventHandler(tt.mock, zap.NewNop())
 			r := gin.New()
+			r.Use(func(c *gin.Context) {
+				c.Set("auth_role", "ADMIN")
+				c.Next()
+			})
 			v1 := r.Group("/api/v1")
 			h.RegisterRoutes(v1)
 

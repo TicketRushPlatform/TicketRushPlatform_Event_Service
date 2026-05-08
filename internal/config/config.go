@@ -12,6 +12,12 @@ type Config struct {
 	Logger   logger.Config
 	Server   server.ServerConfig
 	Postgres database.PostgresConfig
+	Auth     AuthConfig
+}
+
+type AuthConfig struct {
+	JWTSecret    string
+	JWTAlgorithm string
 }
 
 func NewConfig() Config {
@@ -37,5 +43,16 @@ func NewConfig() Config {
 		Logger: logger.Config{
 			Level: v.GetString("LOG_LEVEL"),
 		},
+		Auth: AuthConfig{
+			JWTSecret:    getStringOrDefault(v.GetString("JWT_SECRET"), "dev-only-secret"),
+			JWTAlgorithm: getStringOrDefault(v.GetString("JWT_ALGORITHM"), "HS256"),
+		},
 	}
+}
+
+func getStringOrDefault(value string, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
