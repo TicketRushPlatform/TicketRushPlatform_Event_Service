@@ -161,3 +161,27 @@ func TestRequireAnyRole(t *testing.T) {
 		t.Fatalf("status=%d", w2.Code)
 	}
 }
+
+func TestGetUserIDAndGetRole(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	if _, ok := GetUserID(c); ok {
+		t.Fatalf("expected GetUserID false when context missing")
+	}
+	if role := GetRole(c); role != "" {
+		t.Fatalf("expected empty role, got %q", role)
+	}
+
+	id := uuid.New()
+	c.Set("auth_sub", id.String())
+	c.Set("auth_role", "ADMIN")
+	got, ok := GetUserID(c)
+	if !ok || got != id {
+		t.Fatalf("unexpected user id: %v ok=%v", got, ok)
+	}
+	if role := GetRole(c); role != "ADMIN" {
+		t.Fatalf("expected ADMIN role, got %q", role)
+	}
+}
