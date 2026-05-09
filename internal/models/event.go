@@ -3,6 +3,8 @@ package models
 import (
 	"event_service/internal/dto"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type EventType string
@@ -15,6 +17,7 @@ const (
 type Event struct {
 	Base
 
+	CreatorID       uuid.UUID `gorm:"type:uuid;not null;index"`
 	Name            string    `gorm:"type:text;not null"`
 	Description     string    `gorm:"type:text"`
 	DurationMinutes int       `gorm:"not null"`
@@ -38,6 +41,7 @@ type Event struct {
 func (e *Event) ToDTO() *dto.EventResponse {
 	return &dto.EventResponse{
 		ID:              e.ID.String(),
+		CreatorID:       e.CreatorID.String(),
 		Name:            e.Name,
 		Description:     e.Description,
 		DurationMinutes: e.DurationMinutes,

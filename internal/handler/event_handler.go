@@ -25,16 +25,16 @@ func NewEventHandler(service services.EventService, logger *zap.Logger) *EventHa
 	}
 }
 
-func (h *EventHandler) RegisterRoutes(rg *gin.RouterGroup) {
+func (h *EventHandler) RegisterRoutes(rg *gin.RouterGroup, authMiddleware gin.HandlerFunc) {
 	events := rg.Group("/events")
 	{
-		events.POST("", middleware.RequireAnyRole("EVENT_OWNER", "ADMIN"), h.CreateEvent)
+		events.POST("", authMiddleware, h.CreateEvent)
 		events.GET("", h.ListEvents)
 		events.GET("/:id", h.GetEvent)
 		events.GET("/:id/showtimes", h.ListShowtimesByEvent)
-		events.PUT("/:id/showtimes", middleware.RequireAnyRole("EVENT_OWNER", "ADMIN"), h.ReplaceEventShowtimes)
-		events.PUT("/:id", middleware.RequireAnyRole("EVENT_OWNER", "ADMIN"), h.UpdateEvent)
-		events.DELETE("/:id", middleware.RequireAnyRole("EVENT_OWNER", "ADMIN"), h.DeleteEvent)
+		events.PUT("/:id/showtimes", authMiddleware, h.ReplaceEventShowtimes)
+		events.PUT("/:id", authMiddleware, h.UpdateEvent)
+		events.DELETE("/:id", authMiddleware, h.DeleteEvent)
 	}
 
 	showtimes := rg.Group("/showtimes")
@@ -63,6 +63,16 @@ func (h *EventHandler) CreateEvent(c *gin.Context) {
 		})
 		return
 	}
+
+	authUserID, isAuthed := middleware.GetUserID(c)
+	if !isAuthed {
+		c.JSON(http.StatusUnauthorized, dto.ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: "authenticated user was not found in request context",
+		})
+		return
+	}
+	req.CreatorID = authUserID.String()
 
 	event, err := h.service.CreateEvent(req)
 	if err != nil {
@@ -167,6 +177,29 @@ func (h *EventHandler) UpdateEvent(c *gin.Context) {
 		return
 	}
 
+	authUserID, isAuthed := middleware.GetUserID(c)
+	if !isAuthed {
+		c.JSON(http.StatusUnauthorized, dto.ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: "authenticated user was not found in request context",
+		})
+		return
+	}
+
+	currentEvent, err := h.service.GetEvent(eventID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	if currentEvent.CreatorID != authUserID.String() && middleware.GetRole(c) != "ADMIN" {
+		c.JSON(http.StatusForbidden, dto.ErrorResponse{
+			Code:    http.StatusForbidden,
+			Message: "you do not have permission to modify this event",
+		})
+		return
+	}
+
 	var req dto.UpdateEventRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
@@ -205,6 +238,29 @@ func (h *EventHandler) DeleteEvent(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
 			Code:    http.StatusBadRequest,
 			Message: "invalid event ID",
+		})
+		return
+	}
+
+	authUserID, isAuthed := middleware.GetUserID(c)
+	if !isAuthed {
+		c.JSON(http.StatusUnauthorized, dto.ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: "authenticated user was not found in request context",
+		})
+		return
+	}
+
+	currentEvent, err := h.service.GetEvent(eventID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	if currentEvent.CreatorID != authUserID.String() && middleware.GetRole(c) != "ADMIN" {
+		c.JSON(http.StatusForbidden, dto.ErrorResponse{
+			Code:    http.StatusForbidden,
+			Message: "you do not have permission to delete this event",
 		})
 		return
 	}
@@ -262,6 +318,30 @@ func (h *EventHandler) ReplaceEventShowtimes(c *gin.Context) {
 		})
 		return
 	}
+
+	authUserID, isAuthed := middleware.GetUserID(c)
+	if !isAuthed {
+		c.JSON(http.StatusUnauthorized, dto.ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: "authenticated user was not found in request context",
+		})
+		return
+	}
+
+	currentEvent, err := h.service.GetEvent(eventID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	if currentEvent.CreatorID != authUserID.String() && middleware.GetRole(c) != "ADMIN" {
+		c.JSON(http.StatusForbidden, dto.ErrorResponse{
+			Code:    http.StatusForbidden,
+			Message: "you do not have permission to modify this event's showtimes",
+		})
+		return
+	}
+
 	var req []dto.UpsertShowtimeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{

@@ -55,9 +55,35 @@ func RequireAuth(cfg AuthConfig) gin.HandlerFunc {
 			return
 		}
 
+		c.Set("auth_sub", claims.Sub)
 		c.Set("auth_role", strings.ToUpper(strings.TrimSpace(claims.Role)))
 		c.Next()
 	}
+}
+
+func GetUserID(c *gin.Context) (uuid.UUID, bool) {
+	sub, exists := c.Get("auth_sub")
+	if !exists {
+		return uuid.Nil, false
+	}
+	idStr, ok := sub.(string)
+	if !ok {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+func GetRole(c *gin.Context) string {
+	role, exists := c.Get("auth_role")
+	if !exists {
+		return ""
+	}
+	roleStr, _ := role.(string)
+	return roleStr
 }
 
 func RequireAdmin() gin.HandlerFunc {
