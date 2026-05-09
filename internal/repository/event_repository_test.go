@@ -50,6 +50,7 @@ func TestEventRepository_CRUD(t *testing.T) {
 	repo := setupEventRepo(t)
 
 	createReq := dto.CreateEventRequest{
+		CreatorID:       uuid.NewString(),
 		Name:            "Cinema Night",
 		Description:     "Movie",
 		DurationMinutes: 120,
@@ -133,6 +134,7 @@ func TestEventRepository_ErrorPathsWithMock(t *testing.T) {
 		mock.ExpectRollback()
 
 		_, err := repo.Create(dto.CreateEventRequest{
+			CreatorID:       uuid.NewString(),
 			Name:            "x",
 			DurationMinutes: 1,
 			EventType:       "EVENT",

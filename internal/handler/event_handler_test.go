@@ -65,7 +65,7 @@ func TestEventHandler_AuthJWTAndRoles(t *testing.T) {
 		JWTSecret: secret, JWTAlgorithm: "HS256",
 	}))
 	v1 := r.Group("/api/v1")
-	h.RegisterRoutes(v1)
+	h.RegisterRoutes(v1, middleware.RequireAnyRole("ADMIN", "EVENT_OWNER"))
 
 	body := mustJSON(t, dto.CreateEventRequest{Name: "E", DurationMinutes: 99, EventType: "MOVIE"})
 
@@ -108,11 +108,14 @@ func mustJSON(t *testing.T, v any) []byte {
 func TestEventHandler_Create_Delete_AppErrorsThroughHandleError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	id := uuid.New()
+	authSub := uuid.NewString()
 	conflictMock := &eventServiceMock{
 		createFn: func(req dto.CreateEventRequest) (*dto.EventResponse, error) {
 			return nil, apperror.NewConflict("duplicate")
 		},
-		getFn:         func(uuid.UUID) (*dto.EventResponse, error) { return nil, errors.New("x") },
+		getFn: func(uuid.UUID) (*dto.EventResponse, error) {
+			return &dto.EventResponse{ID: id.String(), CreatorID: authSub}, nil
+		},
 		getShowtimeFn: func(uuid.UUID) (*dto.ShowtimeResponse, error) { return nil, errors.New("x") },
 		listShowtimesFn: func(uuid.UUID) ([]dto.ShowtimeResponse, error) {
 			return nil, errors.New("x")
@@ -131,7 +134,11 @@ func TestEventHandler_Create_Delete_AppErrorsThroughHandleError(t *testing.T) {
 		c.Next()
 	})
 	v1 := r.Group("/api/v1")
-	h.RegisterRoutes(v1)
+	h.RegisterRoutes(v1, func(c *gin.Context) {
+		c.Set("auth_sub", authSub)
+		c.Set("auth_role", "ADMIN")
+		c.Next()
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", bytes.NewReader(mustJSON(t, dto.CreateEventRequest{Name: "E", DurationMinutes: 120, EventType: "MOVIE"})))
 	req.Header.Set("Content-Type", "application/json")
@@ -192,6 +199,8 @@ func TestEventHandler_Create_ServiceGenericErrorUsesHandleErrorInternal(t *testi
 	body := mustJSON(t, dto.CreateEventRequest{Name: "E", DurationMinutes: 120, EventType: "MOVIE"})
 	c.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set("auth_sub", uuid.NewString())
+	c.Set("auth_role", "ADMIN")
 	h.CreateEvent(c)
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d want 500", w.Code)
@@ -277,7 +286,11 @@ func TestEventHandlerRoutes(t *testing.T) {
 		c.Next()
 	})
 	v1 := r.Group("/api/v1")
-	h.RegisterRoutes(v1)
+	h.RegisterRoutes(v1, func(c *gin.Context) {
+		c.Set("auth_sub", uuid.NewString())
+		c.Set("auth_role", "ADMIN")
+		c.Next()
+	})
 
 	tests := []struct {
 		name       string
@@ -316,6 +329,7 @@ func TestEventHandlerRoutes(t *testing.T) {
 
 func TestEventHandlerErrorPaths(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	testAuthSub := uuid.NewString()
 
 	tests := []struct {
 		name       string
@@ -471,7 +485,9 @@ func TestEventHandlerErrorPaths(t *testing.T) {
 				tt.mock.createFn = func(req dto.CreateEventRequest) (*dto.EventResponse, error) { return nil, nil }
 			}
 			if tt.mock.getFn == nil {
-				tt.mock.getFn = func(eventID uuid.UUID) (*dto.EventResponse, error) { return nil, nil }
+				tt.mock.getFn = func(eventID uuid.UUID) (*dto.EventResponse, error) {
+					return &dto.EventResponse{ID: eventID.String(), CreatorID: testAuthSub}, nil
+				}
 			}
 			if tt.mock.listFn == nil {
 				tt.mock.listFn = func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error) { return nil, 0, 0, nil }
@@ -496,7 +512,11 @@ func TestEventHandlerErrorPaths(t *testing.T) {
 				c.Next()
 			})
 			v1 := r.Group("/api/v1")
-			h.RegisterRoutes(v1)
+			h.RegisterRoutes(v1, func(c *gin.Context) {
+				c.Set("auth_sub", testAuthSub)
+				c.Set("auth_role", "ADMIN")
+				c.Next()
+			})
 
 			var body []byte
 			if tt.body != nil {
@@ -511,4 +531,112 @@ func TestEventHandlerErrorPaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEventHandler_UpdateDeleteReplace_AuthBranches(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	eventID := uuid.New()
+	ownerID := uuid.NewString()
+
+	baseMock := &eventServiceMock{
+		createFn:      func(req dto.CreateEventRequest) (*dto.EventResponse, error) { return nil, errors.New("x") },
+		getShowtimeFn: func(uuid.UUID) (*dto.ShowtimeResponse, error) { return nil, errors.New("x") },
+		listShowtimesFn: func(uuid.UUID) ([]dto.ShowtimeResponse, error) {
+			return nil, errors.New("x")
+		},
+		listFn: func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error) {
+			return nil, 0, 0, errors.New("x")
+		},
+		getFn: func(id uuid.UUID) (*dto.EventResponse, error) {
+			return &dto.EventResponse{ID: id.String(), CreatorID: ownerID}, nil
+		},
+		updateFn: func(uuid.UUID, dto.UpdateEventRequest) (*dto.EventResponse, error) {
+			return &dto.EventResponse{ID: eventID.String(), CreatorID: ownerID}, nil
+		},
+		deleteFn: func(uuid.UUID) error { return nil },
+		replaceShowtimesFn: func(eventID uuid.UUID, showtimes []dto.UpsertShowtimeRequest) ([]dto.ShowtimeResponse, error) {
+			return []dto.ShowtimeResponse{}, nil
+		},
+	}
+	h := NewEventHandler(baseMock, zap.NewNop())
+
+	t.Run("update unauthorized", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{{Key: "id", Value: eventID.String()}}
+		c.Request = httptest.NewRequest(http.MethodPut, "/events/"+eventID.String(), bytes.NewReader(mustJSON(t, dto.UpdateEventRequest{
+			Name: "Updated", DurationMinutes: 100, EventType: "MOVIE",
+		})))
+		c.Request.Header.Set("Content-Type", "application/json")
+		h.UpdateEvent(c)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("status=%d want 401", w.Code)
+		}
+	})
+
+	t.Run("update forbidden non-owner", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{{Key: "id", Value: eventID.String()}}
+		c.Request = httptest.NewRequest(http.MethodPut, "/events/"+eventID.String(), bytes.NewReader(mustJSON(t, dto.UpdateEventRequest{
+			Name: "Updated", DurationMinutes: 100, EventType: "MOVIE",
+		})))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("auth_sub", uuid.NewString())
+		c.Set("auth_role", "EVENT_OWNER")
+		h.UpdateEvent(c)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status=%d want 403", w.Code)
+		}
+	})
+
+	t.Run("delete unauthorized", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{{Key: "id", Value: eventID.String()}}
+		c.Request = httptest.NewRequest(http.MethodDelete, "/events/"+eventID.String(), nil)
+		h.DeleteEvent(c)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("status=%d want 401", w.Code)
+		}
+	})
+
+	t.Run("delete forbidden non-owner", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{{Key: "id", Value: eventID.String()}}
+		c.Request = httptest.NewRequest(http.MethodDelete, "/events/"+eventID.String(), nil)
+		c.Set("auth_sub", uuid.NewString())
+		c.Set("auth_role", "EVENT_OWNER")
+		h.DeleteEvent(c)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status=%d want 403", w.Code)
+		}
+	})
+
+	t.Run("replace showtimes unauthorized", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{{Key: "id", Value: eventID.String()}}
+		c.Request = httptest.NewRequest(http.MethodPut, "/events/"+eventID.String()+"/showtimes", bytes.NewReader(mustJSON(t, []dto.UpsertShowtimeRequest{})))
+		c.Request.Header.Set("Content-Type", "application/json")
+		h.ReplaceEventShowtimes(c)
+		if w.Code != http.StatusUnauthorized {
+			t.Fatalf("status=%d want 401", w.Code)
+		}
+	})
+
+	t.Run("replace showtimes forbidden non-owner", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Params = gin.Params{{Key: "id", Value: eventID.String()}}
+		c.Request = httptest.NewRequest(http.MethodPut, "/events/"+eventID.String()+"/showtimes", bytes.NewReader(mustJSON(t, []dto.UpsertShowtimeRequest{})))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set("auth_sub", uuid.NewString())
+		c.Set("auth_role", "EVENT_OWNER")
+		h.ReplaceEventShowtimes(c)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("status=%d want 403", w.Code)
+		}
+	})
 }
