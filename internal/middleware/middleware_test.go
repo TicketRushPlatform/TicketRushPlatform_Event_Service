@@ -48,3 +48,15 @@ func TestMiddleware(t *testing.T) {
 		})
 	}
 }
+
+func TestRequestLogger_ServerErrorBranch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(RequestLogger(zap.NewNop()))
+	r.GET("/boom", func(c *gin.Context) { c.Status(http.StatusInternalServerError) })
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/boom", nil))
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d", w.Code)
+	}
+}

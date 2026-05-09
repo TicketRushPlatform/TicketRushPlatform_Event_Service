@@ -6,15 +6,197 @@ import (
 	"errors"
 	"event_service/internal/apperror"
 	"event_service/internal/dto"
+	"event_service/internal/middleware"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
+
+func bearerJWT(t *testing.T, secret, role string, sub uuid.UUID) string {
+	t.Helper()
+	claims := middleware.AuthClaims{
+		Sub:  sub.String(),
+		Role: role,
+		Type: "access",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &claims)
+	s, err := token.SignedString([]byte(secret))
+	if err != nil {
+		t.Fatalf("sign jwt: %v", err)
+	}
+	return s
+}
+
+func TestEventHandler_AuthJWTAndRoles(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	secret := "handler-jwt-secret"
+	sub := uuid.New()
+	now := time.Now().UTC()
+	created := &dto.EventResponse{ID: uuid.NewString(), Name: "E", EventType: "MOVIE", CreatedAt: now, UpdatedAt: now}
+	h := NewEventHandler(&eventServiceMock{
+		createFn: func(req dto.CreateEventRequest) (*dto.EventResponse, error) {
+			out := *created
+			out.Name = req.Name
+			return &out, nil
+		},
+		getFn:         func(uuid.UUID) (*dto.EventResponse, error) { return nil, errors.New("x") },
+		getShowtimeFn: func(uuid.UUID) (*dto.ShowtimeResponse, error) { return nil, errors.New("x") },
+		listShowtimesFn: func(uuid.UUID) ([]dto.ShowtimeResponse, error) {
+			return nil, errors.New("x")
+		},
+		listFn: func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error) {
+			return nil, 0, 0, errors.New("x")
+		},
+		updateFn: func(uuid.UUID, dto.UpdateEventRequest) (*dto.EventResponse, error) { return nil, errors.New("x") },
+		deleteFn: func(uuid.UUID) error { return errors.New("x") },
+	}, zap.NewNop())
+
+	r := gin.New()
+	r.Use(middleware.RequireAuth(middleware.AuthConfig{
+		JWTSecret: secret, JWTAlgorithm: "HS256",
+	}))
+	v1 := r.Group("/api/v1")
+	h.RegisterRoutes(v1)
+
+	body := mustJSON(t, dto.CreateEventRequest{Name: "E", DurationMinutes: 99, EventType: "MOVIE"})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("no bearer: status=%d body=%s", w.Code, w.Body.String())
+	}
+
+	req2 := httptest.NewRequest(http.MethodPost, "/api/v1/events", bytes.NewReader(body))
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("Authorization", "Bearer "+bearerJWT(t, secret, "BOOKING_OWNER", sub))
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusForbidden {
+		t.Fatalf("wrong role: status=%d body=%s", w2.Code, w2.Body.String())
+	}
+
+	req3 := httptest.NewRequest(http.MethodPost, "/api/v1/events", bytes.NewReader(body))
+	req3.Header.Set("Content-Type", "application/json")
+	req3.Header.Set("Authorization", "Bearer "+bearerJWT(t, secret, "EVENT_OWNER", sub))
+	w3 := httptest.NewRecorder()
+	r.ServeHTTP(w3, req3)
+	if w3.Code != http.StatusCreated {
+		t.Fatalf("allowed role: status=%d body=%s", w3.Code, w3.Body.String())
+	}
+}
+
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func TestEventHandler_Create_Delete_AppErrorsThroughHandleError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	id := uuid.New()
+	conflictMock := &eventServiceMock{
+		createFn: func(req dto.CreateEventRequest) (*dto.EventResponse, error) {
+			return nil, apperror.NewConflict("duplicate")
+		},
+		getFn:         func(uuid.UUID) (*dto.EventResponse, error) { return nil, errors.New("x") },
+		getShowtimeFn: func(uuid.UUID) (*dto.ShowtimeResponse, error) { return nil, errors.New("x") },
+		listShowtimesFn: func(uuid.UUID) ([]dto.ShowtimeResponse, error) {
+			return nil, errors.New("x")
+		},
+		listFn: func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error) {
+			return nil, 0, 0, errors.New("x")
+		},
+		updateFn: func(uuid.UUID, dto.UpdateEventRequest) (*dto.EventResponse, error) { return nil, errors.New("x") },
+		deleteFn: func(uuid.UUID) error { return apperror.NewNotFound("gone") },
+	}
+	h := NewEventHandler(conflictMock, zap.NewNop())
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("auth_role", "ADMIN")
+		c.Next()
+	})
+	v1 := r.Group("/api/v1")
+	h.RegisterRoutes(v1)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", bytes.NewReader(mustJSON(t, dto.CreateEventRequest{Name: "E", DurationMinutes: 120, EventType: "MOVIE"})))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("create conflict: status=%d", w.Code)
+	}
+
+	req2 := httptest.NewRequest(http.MethodDelete, "/api/v1/events/"+id.String(), nil)
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusNotFound {
+		t.Fatalf("delete not found: status=%d", w2.Code)
+	}
+}
+
+func TestEventHandler_DeleteEvent_InvalidUUID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := NewEventHandler(&eventServiceMock{
+		createFn:        func(req dto.CreateEventRequest) (*dto.EventResponse, error) { return nil, errors.New("x") },
+		getFn:           func(uuid.UUID) (*dto.EventResponse, error) { return nil, errors.New("x") },
+		getShowtimeFn:   func(uuid.UUID) (*dto.ShowtimeResponse, error) { return nil, errors.New("x") },
+		listShowtimesFn: func(uuid.UUID) ([]dto.ShowtimeResponse, error) { return nil, errors.New("x") },
+		listFn: func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error) {
+			return nil, 0, 0, errors.New("x")
+		},
+		updateFn: func(uuid.UUID, dto.UpdateEventRequest) (*dto.EventResponse, error) { return nil, errors.New("x") },
+		deleteFn: func(uuid.UUID) error { return errors.New("x") },
+	}, zap.NewNop())
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "id", Value: "not-uuid"}}
+	c.Request = httptest.NewRequest(http.MethodDelete, "/x", nil)
+	h.DeleteEvent(c)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want 400", w.Code)
+	}
+}
+
+func TestEventHandler_Create_ServiceGenericErrorUsesHandleErrorInternal(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := NewEventHandler(&eventServiceMock{
+		createFn: func(req dto.CreateEventRequest) (*dto.EventResponse, error) {
+			return nil, errors.New("db")
+		},
+		getFn:           func(uuid.UUID) (*dto.EventResponse, error) { return nil, errors.New("x") },
+		getShowtimeFn:   func(uuid.UUID) (*dto.ShowtimeResponse, error) { return nil, errors.New("x") },
+		listShowtimesFn: func(uuid.UUID) ([]dto.ShowtimeResponse, error) { return nil, errors.New("x") },
+		listFn: func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error) {
+			return nil, 0, 0, errors.New("x")
+		},
+		updateFn: func(uuid.UUID, dto.UpdateEventRequest) (*dto.EventResponse, error) { return nil, errors.New("x") },
+		deleteFn: func(uuid.UUID) error { return errors.New("x") },
+	}, zap.NewNop())
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := mustJSON(t, dto.CreateEventRequest{Name: "E", DurationMinutes: 120, EventType: "MOVIE"})
+	c.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	h.CreateEvent(c)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("status=%d want 500", w.Code)
+	}
+}
 
 type eventServiceMock struct {
 	createFn           func(req dto.CreateEventRequest) (*dto.EventResponse, error)

@@ -176,6 +176,60 @@ func TestEventRepository_ErrorPathsWithMock(t *testing.T) {
 			t.Fatalf("expected error")
 		}
 	})
+
+	t.Run("list find error without search", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT count\(\*\) FROM "events"`).
+			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
+		mock.ExpectQuery(`SELECT .* FROM "events"`).
+			WillReturnError(errors.New("find failed"))
+
+		_, _, err := repo.List(dto.ListEventsQuery{
+			Page:     1,
+			PageSize: 10,
+		})
+		if err == nil {
+			t.Fatalf("expected error")
+		}
+	})
+
+	expectSingleEventFirst := func(mock sqlmock.Sqlmock, eid uuid.UUID) {
+		rows := sqlmock.NewRows([]string{"id", "name", "description", "duration_minutes", "event_type", "created_at", "updated_at", "deleted_at"}).
+			AddRow(eid, "Event A", "Desc", 120, "EVENT", time.Now().UTC(), time.Now().UTC(), nil)
+		mock.ExpectQuery(`SELECT .* FROM "events"`).
+			WithArgs(eid, 1).
+			WillReturnRows(rows)
+	}
+
+	t.Run("update model updates error", func(t *testing.T) {
+		repo, mock := setupEventRepoMockDB(t)
+		expectSingleEventFirst(mock, eventID)
+		mock.ExpectExec(`UPDATE`).
+			WillReturnError(errors.New("update failed"))
+
+		_, err := repo.Update(eventID, dto.UpdateEventRequest{
+			Name: "n", DurationMinutes: 1, EventType: "EVENT",
+		})
+		if err == nil {
+			t.Fatalf("expected error")
+		}
+	})
+
+	t.Run("update reload first error", func(t *testing.T) {
+		repo, mock := setupEventRepoMockDB(t)
+		expectSingleEventFirst(mock, eventID)
+		mock.ExpectExec(`UPDATE`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectQuery(`SELECT .* FROM "events"`).
+			WithArgs(eventID, 1).
+			WillReturnError(errors.New("reload failed"))
+
+		_, err := repo.Update(eventID, dto.UpdateEventRequest{
+			Name: "n", DurationMinutes: 1, EventType: "EVENT",
+		})
+		if err == nil {
+			t.Fatalf("expected error")
+		}
+	})
 }
 
 func TestEventRepository_ShowtimeQueries_WithMock(t *testing.T) {
@@ -379,6 +433,73 @@ func TestEventRepository_ReplaceShowtimesByEventID_WithMock(t *testing.T) {
 
 		_, err := repo.ReplaceShowtimesByEventID(eventID, []dto.UpsertShowtimeRequest{{
 			Venue: "Venue A", Address: "Addr A", StartTime: start, EndTime: end,
+		}})
+		if err == nil {
+			t.Fatalf("expected error")
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatalf("unmet expectations: %v", err)
+		}
+	})
+
+	t.Run("replace event not found", func(t *testing.T) {
+		repo, mock := setupEventRepoMockDB(t)
+		mock.ExpectQuery(`SELECT .* FROM "events"`).
+			WithArgs(eventID, 1).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}))
+
+		_, err := repo.ReplaceShowtimesByEventID(eventID, []dto.UpsertShowtimeRequest{{
+			Venue: "V", Address: "A", StartTime: start, EndTime: end,
+		}})
+		if err == nil {
+			t.Fatalf("expected error")
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatalf("unmet expectations: %v", err)
+		}
+	})
+
+	t.Run("insert seat map error", func(t *testing.T) {
+		repo, mock := setupEventRepoMockDB(t)
+		expectGetEvent(mock)
+		mock.ExpectBegin()
+		mock.ExpectExec(`UPDATE show_times SET deleted_at`).
+			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`INSERT INTO venues`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`INSERT INTO seat_maps`).
+			WillReturnError(errors.New("seat map failed"))
+		mock.ExpectRollback()
+
+		_, err := repo.ReplaceShowtimesByEventID(eventID, []dto.UpsertShowtimeRequest{{
+			Venue: "Venue A", Address: "Addr A", StartTime: start, EndTime: end, SeatMapName: "M",
+		}})
+		if err == nil {
+			t.Fatalf("expected error")
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatalf("unmet expectations: %v", err)
+		}
+	})
+
+	t.Run("insert show time error", func(t *testing.T) {
+		repo, mock := setupEventRepoMockDB(t)
+		expectGetEvent(mock)
+		mock.ExpectBegin()
+		mock.ExpectExec(`UPDATE show_times SET deleted_at`).
+			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`INSERT INTO venues`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`INSERT INTO seat_maps`).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`INSERT INTO show_times`).
+			WillReturnError(errors.New("showtime insert failed"))
+		mock.ExpectRollback()
+
+		_, err := repo.ReplaceShowtimesByEventID(eventID, []dto.UpsertShowtimeRequest{{
+			Venue: "Venue A", Address: "Addr A", StartTime: start, EndTime: end, SeatMapName: "M",
 		}})
 		if err == nil {
 			t.Fatalf("expected error")
