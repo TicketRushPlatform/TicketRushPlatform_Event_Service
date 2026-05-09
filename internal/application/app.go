@@ -55,14 +55,16 @@ func NewApp(cfg config.Config) (*App, error) {
 	router.Use(middleware.CORS())
 	router.Use(middleware.RequestID())
 	router.Use(middleware.RequestLogger(zapLogger))
-	router.Use(middleware.RequireAuth(middleware.AuthConfig{
+
+	authMw := middleware.RequireAuth(middleware.AuthConfig{
 		JWTSecret:    cfg.Auth.JWTSecret,
 		JWTAlgorithm: cfg.Auth.JWTAlgorithm,
-	}))
+	})
+
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	apiV1 := router.Group("/api/v1")
-	eventHandler.RegisterRoutes(apiV1)
+	eventHandler.RegisterRoutes(apiV1, authMw)
 
 	zapLogger.Info("application initialized successfully")
 

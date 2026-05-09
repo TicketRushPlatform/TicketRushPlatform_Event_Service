@@ -7,6 +7,7 @@ type CreateEventRequest struct {
 	Description     string     `json:"description"`
 	DurationMinutes int        `json:"duration_minutes" binding:"required,min=1"`
 	EventType       string     `json:"event_type" binding:"required,oneof=EVENT MOVIE"`
+	CreatorID       string     `json:"-"`
 	Category        *string    `json:"category"`
 	Venue           *string    `json:"venue"`
 	City            *string    `json:"city"`

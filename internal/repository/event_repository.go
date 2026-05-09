@@ -36,7 +36,13 @@ func NewEventRepository(db *gorm.DB, logger *zap.Logger) EventRepository {
 }
 
 func (r *eventRepository) Create(req dto.CreateEventRequest) (*models.Event, error) {
+	creatorID, err := uuid.Parse(req.CreatorID)
+	if err != nil {
+		return nil, apperror.NewInternal("invalid creator id", err)
+	}
+
 	event := &models.Event{
+		CreatorID:       creatorID,
 		Name:            req.Name,
 		Description:     req.Description,
 		DurationMinutes: req.DurationMinutes,
