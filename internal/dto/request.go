@@ -53,9 +53,13 @@ type ListEventsQuery struct {
 }
 
 type UpsertShowtimeRequest struct {
-	Venue       string    `json:"venue" binding:"required"`
-	Address     string    `json:"address" binding:"required"`
-	StartTime   time.Time `json:"start_time" binding:"required"`
-	EndTime     time.Time `json:"end_time" binding:"required,gtfield=StartTime"`
-	SeatMapName string    `json:"seat_map_name"`
+	// When set and valid for this event, the existing showtime row is updated in place (preserves seat_map_id for booking data).
+	ID           *string   `json:"id,omitempty"`
+	Venue        string    `json:"venue" binding:"required"`
+	Address      string    `json:"address" binding:"required"`
+	StartTime    time.Time `json:"start_time" binding:"required"`
+	EndTime      time.Time `json:"end_time" binding:"required,gtfield=StartTime"`
+	SeatMapName  string    `json:"seat_map_name"`
+	QueueEnabled bool      `json:"queue_enabled"`
+	QueueLimit   int       `json:"queue_limit"`
 }

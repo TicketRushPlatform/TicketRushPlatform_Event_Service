@@ -5,6 +5,7 @@ import (
 	"event_service/internal/dto"
 	"event_service/internal/models"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -119,24 +120,24 @@ func (r *eventRepository) Update(eventID uuid.UUID, req dto.UpdateEventRequest) 
 	}
 
 	updates := map[string]interface{}{
-		"name":                     req.Name,
-		"description":              req.Description,
-		"duration_minutes":         req.DurationMinutes,
-		"event_type":               req.EventType,
-		"category":                 req.Category,
-		"venue":                    req.Venue,
-		"city":                     req.City,
-		"address":                  req.Address,
-		"organizer":                req.Organizer,
-		"image_url":                req.ImageURL,
-		"sale_opens_at":            req.SaleOpensAt,
-		"is_flash_sale":            req.IsFlashSale,
-		"status":                   req.Status,
-		"director":                 req.Director,
-		"age_rating":               req.AgeRating,
-		"release_date":             req.ReleaseDate,
-		"language":                 req.Language,
-		"max_tickets_per_booking":  req.MaxTicketsPerBooking,
+		"name":                    req.Name,
+		"description":             req.Description,
+		"duration_minutes":        req.DurationMinutes,
+		"event_type":              req.EventType,
+		"category":                req.Category,
+		"venue":                   req.Venue,
+		"city":                    req.City,
+		"address":                 req.Address,
+		"organizer":               req.Organizer,
+		"image_url":               req.ImageURL,
+		"sale_opens_at":           req.SaleOpensAt,
+		"is_flash_sale":           req.IsFlashSale,
+		"status":                  req.Status,
+		"director":                req.Director,
+		"age_rating":              req.AgeRating,
+		"release_date":            req.ReleaseDate,
+		"language":                req.Language,
+		"max_tickets_per_booking": req.MaxTicketsPerBooking,
 	}
 
 	if err := r.db.Model(event).Updates(updates).Error; err != nil {
@@ -160,7 +161,9 @@ func (r *eventRepository) GetShowtimeByID(showtimeID uuid.UUID) (*dto.ShowtimeRe
 			v.address AS address,
 			st.start_time,
 			st.end_time,
-			sm.name AS seat_map_name
+			sm.name AS seat_map_name,
+			st.queue_enabled,
+			st.queue_limit
 		FROM show_times st
 		INNER JOIN seat_maps sm ON sm.id = st.seat_map_id
 		INNER JOIN venues v ON v.id = sm.venue_id
@@ -186,7 +189,9 @@ func (r *eventRepository) ListShowtimesByEventID(eventID uuid.UUID) ([]dto.Showt
 			v.address AS address,
 			st.start_time,
 			st.end_time,
-			sm.name AS seat_map_name
+			sm.name AS seat_map_name,
+			st.queue_enabled,
+			st.queue_limit
 		FROM show_times st
 		INNER JOIN seat_maps sm ON sm.id = st.seat_map_id
 		INNER JOIN venues v ON v.id = sm.venue_id
@@ -227,19 +232,82 @@ func (r *eventRepository) ReplaceShowtimesByEventID(eventID uuid.UUID, showtimes
 	}()
 
 	now := time.Now().UTC()
-	if err := tx.Exec(`UPDATE show_times SET deleted_at = ?, updated_at = ? WHERE event_id = ? AND deleted_at IS NULL`, now, now, eventID).Error; err != nil {
-		tx.Rollback()
-		return nil, apperror.NewInternal("failed to clear old showtimes", err)
+
+	if len(showtimes) == 0 {
+		if err := tx.Exec(`UPDATE show_times SET deleted_at = ?, updated_at = ? WHERE event_id = ? AND deleted_at IS NULL`, now, now, eventID).Error; err != nil {
+			tx.Rollback()
+			return nil, apperror.NewInternal("failed to clear showtimes", err)
+		}
+		if err := tx.Commit().Error; err != nil {
+			return nil, apperror.NewInternal("failed to commit showtime updates", err)
+		}
+		return r.ListShowtimesByEventID(eventID)
 	}
 
+	finalIDs := make([]uuid.UUID, 0, len(showtimes))
+
 	for index, item := range showtimes {
-		venueID := uuid.New()
-		seatMapID := uuid.New()
-		showtimeID := uuid.New()
 		seatMapName := item.SeatMapName
 		if seatMapName == "" {
 			seatMapName = fmt.Sprintf("Auto map %d", index+1)
 		}
+		queueLimit := item.QueueLimit
+		if queueLimit <= 0 {
+			queueLimit = 50
+		}
+		if queueLimit > 10000 {
+			queueLimit = 10000
+		}
+
+		var existingID *uuid.UUID
+		if item.ID != nil && strings.TrimSpace(*item.ID) != "" {
+			if id, err := uuid.Parse(strings.TrimSpace(*item.ID)); err == nil {
+				var cnt int64
+				if err := tx.Raw(`SELECT COUNT(*) FROM show_times WHERE id = ? AND event_id = ? AND deleted_at IS NULL`, id, eventID).Scan(&cnt).Error; err != nil {
+					tx.Rollback()
+					return nil, apperror.NewInternal("failed to verify showtime", err)
+				}
+				if cnt == 1 {
+					existingID = &id
+				}
+			}
+		}
+
+		if existingID != nil {
+			if err := tx.Exec(`
+				UPDATE show_times
+				SET start_time = ?, end_time = ?, queue_enabled = ?, queue_limit = ?, updated_at = ?
+				WHERE id = ? AND event_id = ? AND deleted_at IS NULL
+			`, item.StartTime, item.EndTime, item.QueueEnabled, queueLimit, now, *existingID, eventID).Error; err != nil {
+				tx.Rollback()
+				return nil, apperror.NewInternal("failed to update showtime", err)
+			}
+			if err := tx.Exec(`
+				UPDATE venues v
+				SET name = ?, address = ?, updated_at = ?
+				FROM seat_maps sm
+				INNER JOIN show_times st ON st.seat_map_id = sm.id AND st.id = ? AND st.event_id = ? AND st.deleted_at IS NULL
+				WHERE v.id = sm.venue_id
+			`, item.Venue, item.Address, now, *existingID, eventID).Error; err != nil {
+				tx.Rollback()
+				return nil, apperror.NewInternal("failed to update venue for showtime", err)
+			}
+			if err := tx.Exec(`
+				UPDATE seat_maps sm
+				SET name = ?, updated_at = ?
+				FROM show_times st
+				WHERE st.seat_map_id = sm.id AND st.id = ? AND st.event_id = ? AND st.deleted_at IS NULL
+			`, seatMapName, now, *existingID, eventID).Error; err != nil {
+				tx.Rollback()
+				return nil, apperror.NewInternal("failed to update seat map for showtime", err)
+			}
+			finalIDs = append(finalIDs, *existingID)
+			continue
+		}
+
+		venueID := uuid.New()
+		seatMapID := uuid.New()
+		showtimeID := uuid.New()
 
 		if err := tx.Exec(
 			`INSERT INTO venues (id, name, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
@@ -258,12 +326,25 @@ func (r *eventRepository) ReplaceShowtimesByEventID(eventID uuid.UUID, showtimes
 		}
 
 		if err := tx.Exec(
-			`INSERT INTO show_times (id, event_id, seat_map_id, start_time, end_time, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			showtimeID, eventID, seatMapID, item.StartTime, item.EndTime, now, now,
+			`INSERT INTO show_times (id, event_id, seat_map_id, start_time, end_time, queue_enabled, queue_limit, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			showtimeID, eventID, seatMapID, item.StartTime, item.EndTime, item.QueueEnabled, queueLimit, now, now,
 		).Error; err != nil {
 			tx.Rollback()
 			return nil, apperror.NewInternal("failed to create showtime", err)
 		}
+		finalIDs = append(finalIDs, showtimeID)
+	}
+
+	orphanQ := tx.Table("show_times").Where("event_id = ? AND deleted_at IS NULL", eventID)
+	if len(finalIDs) > 0 {
+		orphanQ = orphanQ.Where("id NOT IN ?", finalIDs)
+	}
+	if err := orphanQ.Updates(map[string]interface{}{
+		"deleted_at": now,
+		"updated_at": now,
+	}).Error; err != nil {
+		tx.Rollback()
+		return nil, apperror.NewInternal("failed to remove old showtimes", err)
 	}
 
 	if err := tx.Commit().Error; err != nil {
