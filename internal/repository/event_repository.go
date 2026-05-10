@@ -43,24 +43,25 @@ func (r *eventRepository) Create(req dto.CreateEventRequest) (*models.Event, err
 	}
 
 	event := &models.Event{
-		CreatorID:       creatorID,
-		Name:            req.Name,
-		Description:     req.Description,
-		DurationMinutes: req.DurationMinutes,
-		EventType:       models.EventType(req.EventType),
-		Category:        req.Category,
-		Venue:           req.Venue,
-		City:            req.City,
-		Address:         req.Address,
-		Organizer:       req.Organizer,
-		ImageURL:        req.ImageURL,
-		SaleOpensAt:     req.SaleOpensAt,
-		IsFlashSale:     req.IsFlashSale,
-		Status:          req.Status,
-		Director:        req.Director,
-		AgeRating:       req.AgeRating,
-		ReleaseDate:     req.ReleaseDate,
-		Language:        req.Language,
+		CreatorID:            creatorID,
+		Name:                 req.Name,
+		Description:          req.Description,
+		DurationMinutes:      req.DurationMinutes,
+		EventType:            models.EventType(req.EventType),
+		Category:             req.Category,
+		Venue:                req.Venue,
+		City:                 req.City,
+		Address:              req.Address,
+		Organizer:            req.Organizer,
+		ImageURL:             req.ImageURL,
+		SaleOpensAt:          req.SaleOpensAt,
+		IsFlashSale:          req.IsFlashSale,
+		Status:               req.Status,
+		Director:             req.Director,
+		AgeRating:            req.AgeRating,
+		ReleaseDate:          req.ReleaseDate,
+		Language:             req.Language,
+		MaxTicketsPerBooking: req.MaxTicketsPerBooking,
 	}
 
 	if err := r.db.Create(event).Error; err != nil {
@@ -119,25 +120,24 @@ func (r *eventRepository) Update(eventID uuid.UUID, req dto.UpdateEventRequest) 
 	}
 
 	updates := map[string]interface{}{
-		"name":             req.Name,
-		"description":      req.Description,
-		"duration_minutes": req.DurationMinutes,
-		"event_type":       req.EventType,
-		"category":         req.Category,
-		"venue":            req.Venue,
-		"city":             req.City,
-		"address":          req.Address,
-		"organizer":        req.Organizer,
-		"sale_opens_at":    req.SaleOpensAt,
-		"is_flash_sale":    req.IsFlashSale,
-		"status":           req.Status,
-		"director":         req.Director,
-		"age_rating":       req.AgeRating,
-		"release_date":     req.ReleaseDate,
-		"language":         req.Language,
-	}
-	if req.ImageURL != nil {
-		updates["image_url"] = req.ImageURL
+		"name":                    req.Name,
+		"description":             req.Description,
+		"duration_minutes":        req.DurationMinutes,
+		"event_type":              req.EventType,
+		"category":                req.Category,
+		"venue":                   req.Venue,
+		"city":                    req.City,
+		"address":                 req.Address,
+		"organizer":               req.Organizer,
+		"image_url":               req.ImageURL,
+		"sale_opens_at":           req.SaleOpensAt,
+		"is_flash_sale":           req.IsFlashSale,
+		"status":                  req.Status,
+		"director":                req.Director,
+		"age_rating":              req.AgeRating,
+		"release_date":            req.ReleaseDate,
+		"language":                req.Language,
+		"max_tickets_per_booking": req.MaxTicketsPerBooking,
 	}
 
 	if err := r.db.Model(event).Updates(updates).Error; err != nil {
