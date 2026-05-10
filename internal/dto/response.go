@@ -34,6 +34,9 @@ type ShowtimeResponse struct {
 	StartTime   time.Time `json:"start_time"`
 	EndTime     time.Time `json:"end_time"`
 	SeatMapName string    `json:"seat_map_name"`
+
+	QueueEnabled bool `json:"queue_enabled" gorm:"column:queue_enabled"`
+	QueueLimit   int  `json:"queue_limit" gorm:"column:queue_limit"`
 }
 
 type PaginatedResponse struct {

@@ -241,8 +241,8 @@ func TestEventRepository_ShowtimeQueries_WithMock(t *testing.T) {
 	now := time.Now().UTC()
 
 	t.Run("get showtime success", func(t *testing.T) {
-		rows := sqlmock.NewRows([]string{"id", "event_id", "venue", "address", "start_time", "end_time", "seat_map_name"}).
-			AddRow(showtimeID.String(), eventID.String(), "Venue A", "Address A", now, now.Add(time.Hour), "Map A")
+		rows := sqlmock.NewRows([]string{"id", "event_id", "venue", "address", "start_time", "end_time", "seat_map_name", "queue_enabled", "queue_limit"}).
+			AddRow(showtimeID.String(), eventID.String(), "Venue A", "Address A", now, now.Add(time.Hour), "Map A", false, 50)
 		mock.ExpectQuery(`SELECT`).
 			WithArgs(showtimeID).
 			WillReturnRows(rows)
@@ -256,7 +256,7 @@ func TestEventRepository_ShowtimeQueries_WithMock(t *testing.T) {
 	})
 
 	t.Run("get showtime not found", func(t *testing.T) {
-		rows := sqlmock.NewRows([]string{"id", "event_id", "venue", "address", "start_time", "end_time", "seat_map_name"})
+		rows := sqlmock.NewRows([]string{"id", "event_id", "venue", "address", "start_time", "end_time", "seat_map_name", "queue_enabled", "queue_limit"})
 		mock.ExpectQuery(`SELECT`).
 			WithArgs(showtimeID).
 			WillReturnRows(rows)
@@ -277,9 +277,9 @@ func TestEventRepository_ShowtimeQueries_WithMock(t *testing.T) {
 	})
 
 	t.Run("list showtimes by event success", func(t *testing.T) {
-		rows := sqlmock.NewRows([]string{"id", "event_id", "venue", "address", "start_time", "end_time", "seat_map_name"}).
-			AddRow(uuid.NewString(), eventID.String(), "Venue A", "Address A", now, now.Add(time.Hour), "Map A").
-			AddRow(uuid.NewString(), eventID.String(), "Venue B", "Address B", now.Add(2*time.Hour), now.Add(3*time.Hour), "Map B")
+		rows := sqlmock.NewRows([]string{"id", "event_id", "venue", "address", "start_time", "end_time", "seat_map_name", "queue_enabled", "queue_limit"}).
+			AddRow(uuid.NewString(), eventID.String(), "Venue A", "Address A", now, now.Add(time.Hour), "Map A", false, 50).
+			AddRow(uuid.NewString(), eventID.String(), "Venue B", "Address B", now.Add(2*time.Hour), now.Add(3*time.Hour), "Map B", true, 1)
 		mock.ExpectQuery(`SELECT`).
 			WithArgs(eventID).
 			WillReturnRows(rows)
@@ -321,9 +321,6 @@ func TestEventRepository_ReplaceShowtimesByEventID_WithMock(t *testing.T) {
 		repo, mock := setupEventRepoMockDB(t)
 		expectGetEvent(mock)
 		mock.ExpectBegin()
-		mock.ExpectExec(`UPDATE show_times SET deleted_at`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID).
-			WillReturnResult(sqlmock.NewResult(0, 1))
 
 		mock.ExpectExec(`INSERT INTO venues`).
 			WithArgs(sqlmock.AnyArg(), "Venue A", "Addr A", sqlmock.AnyArg(), sqlmock.AnyArg()).
@@ -332,13 +329,17 @@ func TestEventRepository_ReplaceShowtimesByEventID_WithMock(t *testing.T) {
 			WithArgs(sqlmock.AnyArg(), "Auto map 1", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectExec(`INSERT INTO show_times`).
-			WithArgs(sqlmock.AnyArg(), eventID, sqlmock.AnyArg(), start, end, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(sqlmock.AnyArg(), eventID, sqlmock.AnyArg(), start, end, false, 50, sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		mock.ExpectExec(`UPDATE "show_times"`).
+			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID, sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		mock.ExpectCommit()
 
-		rows := sqlmock.NewRows([]string{"id", "event_id", "venue", "address", "start_time", "end_time", "seat_map_name"}).
-			AddRow(showtimeID.String(), eventID.String(), "Venue A", "Addr A", start, end, "Auto map 1")
+		rows := sqlmock.NewRows([]string{"id", "event_id", "venue", "address", "start_time", "end_time", "seat_map_name", "queue_enabled", "queue_limit"}).
+			AddRow(showtimeID.String(), eventID.String(), "Venue A", "Addr A", start, end, "Auto map 1", false, 50)
 		mock.ExpectQuery(`SELECT`).
 			WithArgs(eventID).
 			WillReturnRows(rows)
@@ -376,12 +377,21 @@ func TestEventRepository_ReplaceShowtimesByEventID_WithMock(t *testing.T) {
 		}
 	})
 
-	t.Run("clear old showtimes error", func(t *testing.T) {
+	t.Run("orphan soft-delete error", func(t *testing.T) {
 		repo, mock := setupEventRepoMockDB(t)
 		expectGetEvent(mock)
 		mock.ExpectBegin()
-		mock.ExpectExec(`UPDATE show_times SET deleted_at`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID).
+		mock.ExpectExec(`INSERT INTO venues`).
+			WithArgs(sqlmock.AnyArg(), "Venue A", "Addr A", sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`INSERT INTO seat_maps`).
+			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`INSERT INTO show_times`).
+			WithArgs(sqlmock.AnyArg(), eventID, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`UPDATE "show_times"`).
+			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID, sqlmock.AnyArg()).
 			WillReturnError(errors.New("update failed"))
 		mock.ExpectRollback()
 
@@ -400,9 +410,6 @@ func TestEventRepository_ReplaceShowtimesByEventID_WithMock(t *testing.T) {
 		repo, mock := setupEventRepoMockDB(t)
 		expectGetEvent(mock)
 		mock.ExpectBegin()
-		mock.ExpectExec(`UPDATE show_times SET deleted_at`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID).
-			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectExec(`INSERT INTO venues`).
 			WillReturnError(errors.New("insert venue failed"))
 		mock.ExpectRollback()
@@ -422,15 +429,16 @@ func TestEventRepository_ReplaceShowtimesByEventID_WithMock(t *testing.T) {
 		repo, mock := setupEventRepoMockDB(t)
 		expectGetEvent(mock)
 		mock.ExpectBegin()
-		mock.ExpectExec(`UPDATE show_times SET deleted_at`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID).
-			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectExec(`INSERT INTO venues`).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectExec(`INSERT INTO seat_maps`).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectExec(`INSERT INTO show_times`).
+			WithArgs(sqlmock.AnyArg(), eventID, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), false, 50, sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`UPDATE "show_times"`).
+			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID, sqlmock.AnyArg()).
+			WillReturnResult(sqlmock.NewResult(0, 0))
 		mock.ExpectCommit().WillReturnError(errors.New("commit failed"))
 
 		_, err := repo.ReplaceShowtimesByEventID(eventID, []dto.UpsertShowtimeRequest{{
@@ -465,9 +473,6 @@ func TestEventRepository_ReplaceShowtimesByEventID_WithMock(t *testing.T) {
 		repo, mock := setupEventRepoMockDB(t)
 		expectGetEvent(mock)
 		mock.ExpectBegin()
-		mock.ExpectExec(`UPDATE show_times SET deleted_at`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID).
-			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectExec(`INSERT INTO venues`).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectExec(`INSERT INTO seat_maps`).
@@ -489,9 +494,6 @@ func TestEventRepository_ReplaceShowtimesByEventID_WithMock(t *testing.T) {
 		repo, mock := setupEventRepoMockDB(t)
 		expectGetEvent(mock)
 		mock.ExpectBegin()
-		mock.ExpectExec(`UPDATE show_times SET deleted_at`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID).
-			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectExec(`INSERT INTO venues`).
 			WillReturnResult(sqlmock.NewResult(0, 1))
 		mock.ExpectExec(`INSERT INTO seat_maps`).
@@ -505,6 +507,58 @@ func TestEventRepository_ReplaceShowtimesByEventID_WithMock(t *testing.T) {
 		}})
 		if err == nil {
 			t.Fatalf("expected error")
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatalf("unmet expectations: %v", err)
+		}
+	})
+
+	t.Run("updates in place when id belongs to event", func(t *testing.T) {
+		repo, mock := setupEventRepoMockDB(t)
+		expectGetEvent(mock)
+		mock.ExpectBegin()
+
+		stID := showtimeID.String()
+		countRows := sqlmock.NewRows([]string{"count"}).AddRow(int64(1))
+		mock.ExpectQuery(`SELECT COUNT`).
+			WithArgs(showtimeID, eventID).
+			WillReturnRows(countRows)
+
+		mock.ExpectExec(`UPDATE show_times`).
+			WithArgs(start, end, true, 99, sqlmock.AnyArg(), showtimeID, eventID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`UPDATE venues v`).
+			WithArgs("Venue A", "Addr A", sqlmock.AnyArg(), showtimeID, eventID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+		mock.ExpectExec(`UPDATE seat_maps sm`).
+			WithArgs("Map A", sqlmock.AnyArg(), showtimeID, eventID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		mock.ExpectExec(`UPDATE "show_times"`).
+			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), eventID, showtimeID).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		mock.ExpectCommit()
+
+		listRows := sqlmock.NewRows([]string{"id", "event_id", "venue", "address", "start_time", "end_time", "seat_map_name", "queue_enabled", "queue_limit"}).
+			AddRow(stID, eventID.String(), "Venue A", "Addr A", start, end, "Map A", true, 99)
+		mock.ExpectQuery(`SELECT`).
+			WithArgs(eventID).
+			WillReturnRows(listRows)
+
+		idStr := stID
+		_, err := repo.ReplaceShowtimesByEventID(eventID, []dto.UpsertShowtimeRequest{{
+			ID:           &idStr,
+			Venue:        "Venue A",
+			Address:      "Addr A",
+			StartTime:    start,
+			EndTime:      end,
+			SeatMapName:  "Map A",
+			QueueEnabled: true,
+			QueueLimit:   99,
+		}})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if err := mock.ExpectationsWereMet(); err != nil {
 			t.Fatalf("unmet expectations: %v", err)
