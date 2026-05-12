@@ -31,6 +31,8 @@ func (h *EventHandler) RegisterRoutes(rg *gin.RouterGroup, authMiddleware gin.Ha
 		events.POST("", authMiddleware, h.CreateEvent)
 		events.GET("", h.ListEvents)
 		events.GET("/:id", h.GetEvent)
+		events.GET("/:id/reviews", h.ListEventReviews)
+		events.POST("/:id/reviews", authMiddleware, h.CreateEventReview)
 		events.GET("/:id/showtimes", h.ListShowtimesByEvent)
 		events.PUT("/:id/showtimes", authMiddleware, h.ReplaceEventShowtimes)
 		events.PUT("/:id", authMiddleware, h.UpdateEvent)
@@ -278,6 +280,65 @@ func (h *EventHandler) DeleteEvent(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.SuccessResponse{
 		Message: "event deleted successfully",
+	})
+}
+
+func (h *EventHandler) ListEventReviews(c *gin.Context) {
+	eventID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: "invalid event ID",
+		})
+		return
+	}
+
+	reviews, err := h.service.ListEventReviews(eventID)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, dto.SuccessResponse{Data: reviews})
+}
+
+func (h *EventHandler) CreateEventReview(c *gin.Context) {
+	eventID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: "invalid event ID",
+		})
+		return
+	}
+
+	authUserID, isAuthed := middleware.GetUserID(c)
+	if !isAuthed {
+		c.JSON(http.StatusUnauthorized, dto.ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: "authenticated user was not found in request context",
+		})
+		return
+	}
+
+	var req dto.CreateEventReviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: "invalid request: " + err.Error(),
+		})
+		return
+	}
+	req.UserID = authUserID.String()
+
+	review, err := h.service.CreateEventReview(eventID, req)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.SuccessResponse{
+		Message: "review created successfully",
+		Data:    review,
 	})
 }
 

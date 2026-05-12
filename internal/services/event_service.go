@@ -18,6 +18,8 @@ type EventService interface {
 	ReplaceShowtimesByEvent(eventID uuid.UUID, showtimes []dto.UpsertShowtimeRequest) ([]dto.ShowtimeResponse, error)
 	UpdateEvent(eventID uuid.UUID, req dto.UpdateEventRequest) (*dto.EventResponse, error)
 	DeleteEvent(eventID uuid.UUID) error
+	ListEventReviews(eventID uuid.UUID) ([]dto.EventReviewResponse, error)
+	CreateEventReview(eventID uuid.UUID, req dto.CreateEventReviewRequest) (*dto.EventReviewResponse, error)
 	ListSeatMaps() ([]dto.SeatMapResponse, error)
 	CreateSeatMap(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error)
 }
@@ -108,6 +110,28 @@ func (s *eventService) UpdateEvent(eventID uuid.UUID, req dto.UpdateEventRequest
 func (s *eventService) DeleteEvent(eventID uuid.UUID) error {
 	s.logger.Info("deleting event", zap.String("event_id", eventID.String()))
 	return s.repository.Delete(eventID)
+}
+
+func (s *eventService) ListEventReviews(eventID uuid.UUID) ([]dto.EventReviewResponse, error) {
+	s.logger.Debug("listing event reviews", zap.String("event_id", eventID.String()))
+	reviews, err := s.repository.ListReviewsByEventID(eventID)
+	if err != nil {
+		return nil, err
+	}
+	responses := make([]dto.EventReviewResponse, 0, len(reviews))
+	for _, review := range reviews {
+		responses = append(responses, *review.ToDTO())
+	}
+	return responses, nil
+}
+
+func (s *eventService) CreateEventReview(eventID uuid.UUID, req dto.CreateEventReviewRequest) (*dto.EventReviewResponse, error) {
+	s.logger.Info("creating event review", zap.String("event_id", eventID.String()), zap.Int("rating", req.Rating))
+	review, err := s.repository.CreateReview(eventID, req)
+	if err != nil {
+		return nil, err
+	}
+	return review.ToDTO(), nil
 }
 
 func (s *eventService) ListSeatMaps() ([]dto.SeatMapResponse, error) {

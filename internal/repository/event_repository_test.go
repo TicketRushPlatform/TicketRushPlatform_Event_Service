@@ -23,7 +23,7 @@ func setupEventRepo(t *testing.T) EventRepository {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&models.Event{}); err != nil {
+	if err := db.AutoMigrate(&models.Event{}, &models.EventReview{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
@@ -98,6 +98,27 @@ func TestEventRepository_CRUD(t *testing.T) {
 	}
 	if updated.Name != "Cinema Night Updated" || string(updated.EventType) != "EVENT" {
 		t.Fatalf("Update() not applied")
+	}
+
+	review, err := repo.CreateReview(created.ID, dto.CreateEventReviewRequest{
+		UserID:     uuid.NewString(),
+		AuthorName: "Minh Anh",
+		Rating:     5,
+		Comment:    "Great event.",
+	})
+	if err != nil {
+		t.Fatalf("CreateReview() error: %v", err)
+	}
+	if review.EventID != created.ID || review.Rating != 5 {
+		t.Fatalf("CreateReview() wrong data: %+v", review)
+	}
+
+	reviews, err := repo.ListReviewsByEventID(created.ID)
+	if err != nil {
+		t.Fatalf("ListReviewsByEventID() error: %v", err)
+	}
+	if len(reviews) != 1 || reviews[0].Comment != "Great event." {
+		t.Fatalf("ListReviewsByEventID() unexpected reviews: %+v", reviews)
 	}
 
 	if err := repo.Delete(created.ID); err != nil {

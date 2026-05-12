@@ -20,6 +20,8 @@ type eventRepoMock struct {
 	replaceShowtimesFn func(eventID uuid.UUID, showtimes []dto.UpsertShowtimeRequest) ([]dto.ShowtimeResponse, error)
 	updateFn           func(eventID uuid.UUID, req dto.UpdateEventRequest) (*models.Event, error)
 	deleteFn           func(eventID uuid.UUID) error
+	listReviewsFn      func(eventID uuid.UUID) ([]models.EventReview, error)
+	createReviewFn     func(eventID uuid.UUID, req dto.CreateEventReviewRequest) (*models.EventReview, error)
 	listSeatMapsFn     func() ([]dto.SeatMapResponse, error)
 	createSeatMapFn    func(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error)
 	createCalls        int
@@ -73,6 +75,20 @@ func (m *eventRepoMock) ReplaceShowtimesByEventID(eventID uuid.UUID, showtimes [
 func (m *eventRepoMock) Delete(eventID uuid.UUID) error {
 	m.deleteCalls++
 	return m.deleteFn(eventID)
+}
+
+func (m *eventRepoMock) ListReviewsByEventID(eventID uuid.UUID) ([]models.EventReview, error) {
+	if m.listReviewsFn == nil {
+		return []models.EventReview{}, nil
+	}
+	return m.listReviewsFn(eventID)
+}
+
+func (m *eventRepoMock) CreateReview(eventID uuid.UUID, req dto.CreateEventReviewRequest) (*models.EventReview, error) {
+	if m.createReviewFn == nil {
+		return &models.EventReview{}, nil
+	}
+	return m.createReviewFn(eventID, req)
 }
 
 func (m *eventRepoMock) ListSeatMaps() ([]dto.SeatMapResponse, error) {
