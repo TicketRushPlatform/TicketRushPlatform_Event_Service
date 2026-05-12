@@ -59,6 +59,17 @@ type SuccessResponse struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
+type EventReviewResponse struct {
+	ID         string    `json:"id"`
+	EventID    string    `json:"event_id"`
+	UserID     string    `json:"user_id"`
+	AuthorName string    `json:"author_name"`
+	Rating     int       `json:"rating"`
+	Comment    string    `json:"comment"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 type SeatMapResponse struct {
 	ID           string                `json:"id"`
 	Name         string                `json:"name"`

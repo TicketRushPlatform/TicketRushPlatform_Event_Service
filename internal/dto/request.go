@@ -47,6 +47,13 @@ type UpdateEventRequest struct {
 	MaxTicketsPerBooking *int       `json:"max_tickets_per_booking"`
 }
 
+type CreateEventReviewRequest struct {
+	Rating     int    `json:"rating" binding:"required,min=1,max=5"`
+	Comment    string `json:"comment" binding:"required,min=2,max=2000"`
+	AuthorName string `json:"author_name"`
+	UserID     string `json:"-"`
+}
+
 type ListEventsQuery struct {
 	Page     int    `form:"page,default=1" binding:"min=1"`
 	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`

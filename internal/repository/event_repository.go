@@ -22,6 +22,8 @@ type EventRepository interface {
 	ReplaceShowtimesByEventID(eventID uuid.UUID, showtimes []dto.UpsertShowtimeRequest) ([]dto.ShowtimeResponse, error)
 	Update(eventID uuid.UUID, req dto.UpdateEventRequest) (*models.Event, error)
 	Delete(eventID uuid.UUID) error
+	ListReviewsByEventID(eventID uuid.UUID) ([]models.EventReview, error)
+	CreateReview(eventID uuid.UUID, req dto.CreateEventReviewRequest) (*models.EventReview, error)
 	ListSeatMaps() ([]dto.SeatMapResponse, error)
 	CreateSeatMap(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error)
 }
@@ -219,6 +221,52 @@ func (r *eventRepository) Delete(eventID uuid.UUID) error {
 	}
 
 	return nil
+}
+
+func (r *eventRepository) ListReviewsByEventID(eventID uuid.UUID) ([]models.EventReview, error) {
+	reviews := make([]models.EventReview, 0)
+	if err := r.db.
+		Where("event_id = ? AND deleted_at IS NULL", eventID).
+		Order("created_at DESC").
+		Find(&reviews).Error; err != nil {
+		return nil, apperror.NewInternal("failed to list event reviews", err)
+	}
+	return reviews, nil
+}
+
+func (r *eventRepository) CreateReview(eventID uuid.UUID, req dto.CreateEventReviewRequest) (*models.EventReview, error) {
+	userID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return nil, apperror.NewInternal("invalid review user id", err)
+	}
+
+	var eventCount int64
+	if err := r.db.Model(&models.Event{}).
+		Where("id = ? AND deleted_at IS NULL", eventID).
+		Count(&eventCount).Error; err != nil {
+		return nil, apperror.NewInternal("failed to verify event before review", err)
+	}
+	if eventCount == 0 {
+		return nil, apperror.NewNotFound("event not found")
+	}
+
+	authorName := strings.TrimSpace(req.AuthorName)
+	if authorName == "" {
+		authorName = "TicketRush user"
+	}
+
+	review := &models.EventReview{
+		EventID:    eventID,
+		UserID:     userID,
+		AuthorName: authorName,
+		Rating:     req.Rating,
+		Comment:    strings.TrimSpace(req.Comment),
+	}
+
+	if err := r.db.Create(review).Error; err != nil {
+		return nil, apperror.NewInternal("failed to create event review", err)
+	}
+	return review, nil
 }
 
 func (r *eventRepository) ListSeatMaps() ([]dto.SeatMapResponse, error) {

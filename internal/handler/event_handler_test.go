@@ -216,6 +216,8 @@ type eventServiceMock struct {
 	listFn             func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error)
 	updateFn           func(eventID uuid.UUID, req dto.UpdateEventRequest) (*dto.EventResponse, error)
 	deleteFn           func(eventID uuid.UUID) error
+	listReviewsFn      func(eventID uuid.UUID) ([]dto.EventReviewResponse, error)
+	createReviewFn     func(eventID uuid.UUID, req dto.CreateEventReviewRequest) (*dto.EventReviewResponse, error)
 	listSeatMapsFn     func() ([]dto.SeatMapResponse, error)
 	createSeatMapFn    func(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error)
 }
@@ -251,6 +253,18 @@ func (m *eventServiceMock) UpdateEvent(eventID uuid.UUID, req dto.UpdateEventReq
 	return m.updateFn(eventID, req)
 }
 func (m *eventServiceMock) DeleteEvent(eventID uuid.UUID) error { return m.deleteFn(eventID) }
+func (m *eventServiceMock) ListEventReviews(eventID uuid.UUID) ([]dto.EventReviewResponse, error) {
+	if m.listReviewsFn == nil {
+		return []dto.EventReviewResponse{}, nil
+	}
+	return m.listReviewsFn(eventID)
+}
+func (m *eventServiceMock) CreateEventReview(eventID uuid.UUID, req dto.CreateEventReviewRequest) (*dto.EventReviewResponse, error) {
+	if m.createReviewFn == nil {
+		return &dto.EventReviewResponse{}, nil
+	}
+	return m.createReviewFn(eventID, req)
+}
 func (m *eventServiceMock) ListSeatMaps() ([]dto.SeatMapResponse, error) {
 	if m.listSeatMapsFn == nil {
 		return []dto.SeatMapResponse{}, nil
