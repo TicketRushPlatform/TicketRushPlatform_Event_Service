@@ -63,3 +63,17 @@ type UpsertShowtimeRequest struct {
 	QueueEnabled bool      `json:"queue_enabled"`
 	QueueLimit   int       `json:"queue_limit"`
 }
+
+type CreateSeatMapRequest struct {
+	Name    string                 `json:"name" binding:"required"`
+	Venue   string                 `json:"venue" binding:"required"`
+	Address string                 `json:"address" binding:"required"`
+	Seats   []CreateSeatMapSeatDTO `json:"seats" binding:"required,min=1,dive"`
+}
+
+type CreateSeatMapSeatDTO struct {
+	Row       string  `json:"row" binding:"required"`
+	Number    int     `json:"number" binding:"required,min=1"`
+	SeatClass string  `json:"seat_class" binding:"required,oneof=STANDARD VIP PREMIUM DELUXE"`
+	Price     float64 `json:"price" binding:"required,gt=0"`
+}

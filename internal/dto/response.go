@@ -57,3 +57,20 @@ type SuccessResponse struct {
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 }
+
+type SeatMapResponse struct {
+	ID           string                `json:"id"`
+	Name         string                `json:"name"`
+	VenueID      string                `json:"venue_id"`
+	VenueName    string                `json:"venue_name"`
+	VenueAddress string                `json:"venue_address"`
+	Seats        []SeatMapSeatResponse `json:"seats,omitempty" gorm:"-"`
+}
+
+type SeatMapSeatResponse struct {
+	ID        string  `json:"id"`
+	Row       string  `json:"row"`
+	Number    int     `json:"number"`
+	SeatClass string  `json:"seat_class"`
+	Price     float64 `json:"price"`
+}

@@ -12,19 +12,21 @@ import (
 )
 
 type eventRepoMock struct {
-	createFn     func(req dto.CreateEventRequest) (*models.Event, error)
-	getByIDFn    func(eventID uuid.UUID) (*models.Event, error)
-	listFn       func(query dto.ListEventsQuery) ([]models.Event, int64, error)
-	getShowtimeFn func(showtimeID uuid.UUID) (*dto.ShowtimeResponse, error)
-	listShowtimesFn func(eventID uuid.UUID) ([]dto.ShowtimeResponse, error)
+	createFn           func(req dto.CreateEventRequest) (*models.Event, error)
+	getByIDFn          func(eventID uuid.UUID) (*models.Event, error)
+	listFn             func(query dto.ListEventsQuery) ([]models.Event, int64, error)
+	getShowtimeFn      func(showtimeID uuid.UUID) (*dto.ShowtimeResponse, error)
+	listShowtimesFn    func(eventID uuid.UUID) ([]dto.ShowtimeResponse, error)
 	replaceShowtimesFn func(eventID uuid.UUID, showtimes []dto.UpsertShowtimeRequest) ([]dto.ShowtimeResponse, error)
-	updateFn     func(eventID uuid.UUID, req dto.UpdateEventRequest) (*models.Event, error)
-	deleteFn     func(eventID uuid.UUID) error
-	createCalls  int
-	getByIDCalls int
-	listCalls    int
-	updateCalls  int
-	deleteCalls  int
+	updateFn           func(eventID uuid.UUID, req dto.UpdateEventRequest) (*models.Event, error)
+	deleteFn           func(eventID uuid.UUID) error
+	listSeatMapsFn     func() ([]dto.SeatMapResponse, error)
+	createSeatMapFn    func(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error)
+	createCalls        int
+	getByIDCalls       int
+	listCalls          int
+	updateCalls        int
+	deleteCalls        int
 }
 
 func (m *eventRepoMock) Create(req dto.CreateEventRequest) (*models.Event, error) {
@@ -71,6 +73,20 @@ func (m *eventRepoMock) ReplaceShowtimesByEventID(eventID uuid.UUID, showtimes [
 func (m *eventRepoMock) Delete(eventID uuid.UUID) error {
 	m.deleteCalls++
 	return m.deleteFn(eventID)
+}
+
+func (m *eventRepoMock) ListSeatMaps() ([]dto.SeatMapResponse, error) {
+	if m.listSeatMapsFn == nil {
+		return []dto.SeatMapResponse{}, nil
+	}
+	return m.listSeatMapsFn()
+}
+
+func (m *eventRepoMock) CreateSeatMap(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error) {
+	if m.createSeatMapFn == nil {
+		return &dto.SeatMapResponse{}, nil
+	}
+	return m.createSeatMapFn(req)
 }
 
 func sampleEvent() models.Event {
@@ -287,34 +303,34 @@ func TestEventService_AllMethods(t *testing.T) {
 				}
 			},
 		},
-			{
-				name: "replace showtimes success and error",
-				run: func(t *testing.T, svc EventService, mock *eventRepoMock) {
-					mock.replaceShowtimesFn = func(eventID uuid.UUID, showtimes []dto.UpsertShowtimeRequest) ([]dto.ShowtimeResponse, error) {
-						return []dto.ShowtimeResponse{{ID: uuid.NewString(), EventID: eventID.String(), Venue: "Venue A", Address: "Addr A"}}, nil
-					}
-					got, err := svc.ReplaceShowtimesByEvent(eventID, []dto.UpsertShowtimeRequest{{
-						Venue:     "Venue A",
-						Address:   "Addr A",
-						StartTime: time.Now().UTC(),
-						EndTime:   time.Now().UTC().Add(time.Hour),
-					}})
-					if err != nil {
-						t.Fatalf("unexpected error: %v", err)
-					}
-					if len(got) != 1 {
-						t.Fatalf("expected 1 showtime, got %d", len(got))
-					}
+		{
+			name: "replace showtimes success and error",
+			run: func(t *testing.T, svc EventService, mock *eventRepoMock) {
+				mock.replaceShowtimesFn = func(eventID uuid.UUID, showtimes []dto.UpsertShowtimeRequest) ([]dto.ShowtimeResponse, error) {
+					return []dto.ShowtimeResponse{{ID: uuid.NewString(), EventID: eventID.String(), Venue: "Venue A", Address: "Addr A"}}, nil
+				}
+				got, err := svc.ReplaceShowtimesByEvent(eventID, []dto.UpsertShowtimeRequest{{
+					Venue:     "Venue A",
+					Address:   "Addr A",
+					StartTime: time.Now().UTC(),
+					EndTime:   time.Now().UTC().Add(time.Hour),
+				}})
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if len(got) != 1 {
+					t.Fatalf("expected 1 showtime, got %d", len(got))
+				}
 
-					mock.replaceShowtimesFn = func(eventID uuid.UUID, showtimes []dto.UpsertShowtimeRequest) ([]dto.ShowtimeResponse, error) {
-						return nil, repoErr
-					}
-					_, err = svc.ReplaceShowtimesByEvent(eventID, nil)
-					if !errors.Is(err, repoErr) {
-						t.Fatalf("expected %v, got %v", repoErr, err)
-					}
-				},
+				mock.replaceShowtimesFn = func(eventID uuid.UUID, showtimes []dto.UpsertShowtimeRequest) ([]dto.ShowtimeResponse, error) {
+					return nil, repoErr
+				}
+				_, err = svc.ReplaceShowtimesByEvent(eventID, nil)
+				if !errors.Is(err, repoErr) {
+					t.Fatalf("expected %v, got %v", repoErr, err)
+				}
 			},
+		},
 	}
 
 	for _, tt := range tests {

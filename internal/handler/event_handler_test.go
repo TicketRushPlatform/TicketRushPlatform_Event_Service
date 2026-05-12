@@ -216,6 +216,8 @@ type eventServiceMock struct {
 	listFn             func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error)
 	updateFn           func(eventID uuid.UUID, req dto.UpdateEventRequest) (*dto.EventResponse, error)
 	deleteFn           func(eventID uuid.UUID) error
+	listSeatMapsFn     func() ([]dto.SeatMapResponse, error)
+	createSeatMapFn    func(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error)
 }
 
 func (m *eventServiceMock) CreateEvent(req dto.CreateEventRequest) (*dto.EventResponse, error) {
@@ -249,6 +251,18 @@ func (m *eventServiceMock) UpdateEvent(eventID uuid.UUID, req dto.UpdateEventReq
 	return m.updateFn(eventID, req)
 }
 func (m *eventServiceMock) DeleteEvent(eventID uuid.UUID) error { return m.deleteFn(eventID) }
+func (m *eventServiceMock) ListSeatMaps() ([]dto.SeatMapResponse, error) {
+	if m.listSeatMapsFn == nil {
+		return []dto.SeatMapResponse{}, nil
+	}
+	return m.listSeatMapsFn()
+}
+func (m *eventServiceMock) CreateSeatMap(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error) {
+	if m.createSeatMapFn == nil {
+		return &dto.SeatMapResponse{}, nil
+	}
+	return m.createSeatMapFn(req)
+}
 
 func TestEventHandlerRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
