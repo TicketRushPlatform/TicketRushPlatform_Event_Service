@@ -22,6 +22,7 @@ type EventResponse struct {
 	AgeRating            *string    `json:"age_rating,omitempty"`
 	ReleaseDate          *time.Time `json:"release_date,omitempty"`
 	Language             *string    `json:"language,omitempty"`
+	TrailerURL           *string    `json:"trailer_url,omitempty"`
 	MaxTicketsPerBooking *int       `json:"max_tickets_per_booking,omitempty"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`

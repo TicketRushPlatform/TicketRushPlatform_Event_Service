@@ -94,6 +94,7 @@ func sampleEvent() models.Event {
 	director := "Nolan"
 	rating := "PG-13"
 	language := "EN"
+	trailerURL := "https://www.youtube.com/embed/example"
 	release := now.Add(-24 * time.Hour)
 
 	return models.Event{
@@ -110,6 +111,7 @@ func sampleEvent() models.Event {
 		AgeRating:       &rating,
 		ReleaseDate:     &release,
 		Language:        &language,
+		TrailerURL:      &trailerURL,
 	}
 }
 
