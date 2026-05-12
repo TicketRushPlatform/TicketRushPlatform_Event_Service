@@ -130,6 +130,48 @@ func TestEventRepository_CRUD(t *testing.T) {
 	}
 }
 
+func TestEventRepository_CreateReviewBranches(t *testing.T) {
+	repo := setupEventRepo(t)
+	created, err := repo.Create(dto.CreateEventRequest{
+		CreatorID:       uuid.NewString(),
+		Name:            "Reviewable event",
+		Description:     "Event",
+		DurationMinutes: 90,
+		EventType:       "EVENT",
+	})
+	if err != nil {
+		t.Fatalf("Create() error: %v", err)
+	}
+
+	review, err := repo.CreateReview(created.ID, dto.CreateEventReviewRequest{
+		UserID:  uuid.NewString(),
+		Rating:  4,
+		Comment: "Solid event.",
+	})
+	if err != nil {
+		t.Fatalf("CreateReview() default author error: %v", err)
+	}
+	if review.AuthorName != "TicketRush user" {
+		t.Fatalf("expected default author, got %q", review.AuthorName)
+	}
+
+	if _, err := repo.CreateReview(created.ID, dto.CreateEventReviewRequest{
+		UserID:  "not-a-uuid",
+		Rating:  5,
+		Comment: "Invalid user",
+	}); err == nil {
+		t.Fatalf("expected invalid user id error")
+	}
+
+	if _, err := repo.CreateReview(uuid.New(), dto.CreateEventReviewRequest{
+		UserID:  uuid.NewString(),
+		Rating:  5,
+		Comment: "Missing event",
+	}); err == nil {
+		t.Fatalf("expected event not found error")
+	}
+}
+
 func TestEventRepository_NotFoundPaths(t *testing.T) {
 	repo := setupEventRepo(t)
 	id := uuid.New()

@@ -350,6 +350,70 @@ func TestEventService_AllMethods(t *testing.T) {
 			},
 		},
 		{
+			name: "review methods success and error",
+			run: func(t *testing.T, svc EventService, mock *eventRepoMock) {
+				review := models.EventReview{
+					Base: models.Base{
+						ID:        uuid.New(),
+						CreatedAt: time.Now().UTC(),
+						UpdatedAt: time.Now().UTC(),
+					},
+					EventID:    eventID,
+					UserID:     uuid.New(),
+					AuthorName: "Minh Anh",
+					Rating:     5,
+					Comment:    "Loved it.",
+				}
+
+				mock.listReviewsFn = func(id uuid.UUID) ([]models.EventReview, error) {
+					return []models.EventReview{review}, nil
+				}
+				listed, err := svc.ListEventReviews(eventID)
+				if err != nil {
+					t.Fatalf("unexpected list reviews error: %v", err)
+				}
+				if len(listed) != 1 || listed[0].Comment != review.Comment {
+					t.Fatalf("unexpected reviews response: %+v", listed)
+				}
+
+				mock.listReviewsFn = func(id uuid.UUID) ([]models.EventReview, error) {
+					return nil, repoErr
+				}
+				if _, err := svc.ListEventReviews(eventID); !errors.Is(err, repoErr) {
+					t.Fatalf("expected %v, got %v", repoErr, err)
+				}
+
+				mock.createReviewFn = func(id uuid.UUID, req dto.CreateEventReviewRequest) (*models.EventReview, error) {
+					out := review
+					out.Rating = req.Rating
+					out.Comment = req.Comment
+					return &out, nil
+				}
+				created, err := svc.CreateEventReview(eventID, dto.CreateEventReviewRequest{
+					UserID:     uuid.NewString(),
+					AuthorName: "Minh Anh",
+					Rating:     4,
+					Comment:    "Good event.",
+				})
+				if err != nil {
+					t.Fatalf("unexpected create review error: %v", err)
+				}
+				if created.Rating != 4 || created.Comment != "Good event." {
+					t.Fatalf("unexpected create review response: %+v", created)
+				}
+
+				mock.createReviewFn = func(id uuid.UUID, req dto.CreateEventReviewRequest) (*models.EventReview, error) {
+					return nil, repoErr
+				}
+				if _, err := svc.CreateEventReview(eventID, dto.CreateEventReviewRequest{
+					UserID: uuid.NewString(),
+					Rating: 5, Comment: "x",
+				}); !errors.Is(err, repoErr) {
+					t.Fatalf("expected %v, got %v", repoErr, err)
+				}
+			},
+		},
+		{
 			name: "seat map methods success and error",
 			run: func(t *testing.T, svc EventService, mock *eventRepoMock) {
 				seatMap := dto.SeatMapResponse{

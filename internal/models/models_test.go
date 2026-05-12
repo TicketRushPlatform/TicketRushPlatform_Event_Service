@@ -67,3 +67,27 @@ func TestEventToDTO(t *testing.T) {
 		t.Fatalf("expected trailer URL to be mapped, got %+v", dto.TrailerURL)
 	}
 }
+
+func TestEventReviewToDTO(t *testing.T) {
+	now := time.Now().UTC()
+	review := EventReview{
+		Base: Base{
+			ID:        uuid.New(),
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		EventID:    uuid.New(),
+		UserID:     uuid.New(),
+		AuthorName: "  Minh Anh  ",
+		Rating:     5,
+		Comment:    "Great event.",
+	}
+
+	dto := review.ToDTO()
+	if dto.ID != review.ID.String() || dto.EventID != review.EventID.String() || dto.UserID != review.UserID.String() {
+		t.Fatalf("unexpected dto ids: %+v", dto)
+	}
+	if dto.AuthorName != "Minh Anh" || dto.Rating != 5 || dto.Comment != review.Comment {
+		t.Fatalf("unexpected review dto mapping: %+v", dto)
+	}
+}

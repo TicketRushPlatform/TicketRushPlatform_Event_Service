@@ -292,6 +292,16 @@ func TestEventHandlerRoutes(t *testing.T) {
 		EndTime:     now.Add(time.Hour),
 		SeatMapName: "Map A",
 	}
+	reviewRes := &dto.EventReviewResponse{
+		ID:         uuid.NewString(),
+		EventID:    id.String(),
+		UserID:     uuid.NewString(),
+		AuthorName: "Minh Anh",
+		Rating:     5,
+		Comment:    "Great event.",
+		CreatedAt:  now,
+		UpdatedAt:  now,
+	}
 
 	mock := &eventServiceMock{
 		createFn:      func(req dto.CreateEventRequest) (*dto.EventResponse, error) { return res, nil },
@@ -305,6 +315,15 @@ func TestEventHandlerRoutes(t *testing.T) {
 		},
 		updateFn: func(eventID uuid.UUID, req dto.UpdateEventRequest) (*dto.EventResponse, error) { return res, nil },
 		deleteFn: func(eventID uuid.UUID) error { return nil },
+		listReviewsFn: func(eventID uuid.UUID) ([]dto.EventReviewResponse, error) {
+			return []dto.EventReviewResponse{*reviewRes}, nil
+		},
+		createReviewFn: func(eventID uuid.UUID, req dto.CreateEventReviewRequest) (*dto.EventReviewResponse, error) {
+			out := *reviewRes
+			out.Rating = req.Rating
+			out.Comment = req.Comment
+			return &out, nil
+		},
 		listSeatMapsFn: func() ([]dto.SeatMapResponse, error) {
 			return []dto.SeatMapResponse{{
 				ID:           uuid.NewString(),
@@ -348,6 +367,8 @@ func TestEventHandlerRoutes(t *testing.T) {
 		{"create", http.MethodPost, "/api/v1/events", dto.CreateEventRequest{Name: "M", DurationMinutes: 100, EventType: "MOVIE"}, http.StatusCreated},
 		{"list", http.MethodGet, "/api/v1/events?page=1&page_size=10", nil, http.StatusOK},
 		{"get", http.MethodGet, "/api/v1/events/" + id.String(), nil, http.StatusOK},
+		{"list reviews", http.MethodGet, "/api/v1/events/" + id.String() + "/reviews", nil, http.StatusOK},
+		{"create review", http.MethodPost, "/api/v1/events/" + id.String() + "/reviews", dto.CreateEventReviewRequest{Rating: 5, Comment: "Great event."}, http.StatusCreated},
 		{"get showtime", http.MethodGet, "/api/v1/showtimes/" + showtimeRes.ID, nil, http.StatusOK},
 		{"list showtimes by event", http.MethodGet, "/api/v1/events/" + id.String() + "/showtimes", nil, http.StatusOK},
 		{"replace showtimes", http.MethodPut, "/api/v1/events/" + id.String() + "/showtimes", []dto.UpsertShowtimeRequest{{Venue: "Venue A", Address: "Address A", StartTime: now, EndTime: now.Add(time.Hour), SeatMapName: "Map A"}}, http.StatusOK},
@@ -458,6 +479,52 @@ func TestEventHandlerErrorPaths(t *testing.T) {
 			mock: &eventServiceMock{
 				listShowtimesFn: func(eventID uuid.UUID) ([]dto.ShowtimeResponse, error) {
 					return nil, errors.New("db boom")
+				},
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:       "list reviews invalid event id",
+			method:     http.MethodGet,
+			path:       "/api/v1/events/bad-id/reviews",
+			mock:       &eventServiceMock{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:   "list reviews service error",
+			method: http.MethodGet,
+			path:   "/api/v1/events/" + uuid.New().String() + "/reviews",
+			mock: &eventServiceMock{
+				listReviewsFn: func(eventID uuid.UUID) ([]dto.EventReviewResponse, error) {
+					return nil, apperror.NewNotFound("event not found")
+				},
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "create review invalid event id",
+			method:     http.MethodPost,
+			path:       "/api/v1/events/bad-id/reviews",
+			body:       dto.CreateEventReviewRequest{Rating: 5, Comment: "Great"},
+			mock:       &eventServiceMock{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "create review invalid body",
+			method:     http.MethodPost,
+			path:       "/api/v1/events/" + uuid.New().String() + "/reviews",
+			body:       map[string]any{"rating": 6, "comment": ""},
+			mock:       &eventServiceMock{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:   "create review service error",
+			method: http.MethodPost,
+			path:   "/api/v1/events/" + uuid.New().String() + "/reviews",
+			body:   dto.CreateEventReviewRequest{Rating: 4, Comment: "Good event"},
+			mock: &eventServiceMock{
+				createReviewFn: func(eventID uuid.UUID, req dto.CreateEventReviewRequest) (*dto.EventReviewResponse, error) {
+					return nil, errors.New("db")
 				},
 			},
 			wantStatus: http.StatusInternalServerError,
@@ -599,6 +666,14 @@ func TestEventHandlerErrorPaths(t *testing.T) {
 			}
 			if tt.mock.deleteFn == nil {
 				tt.mock.deleteFn = func(eventID uuid.UUID) error { return nil }
+			}
+			if tt.mock.listReviewsFn == nil {
+				tt.mock.listReviewsFn = func(eventID uuid.UUID) ([]dto.EventReviewResponse, error) { return nil, nil }
+			}
+			if tt.mock.createReviewFn == nil {
+				tt.mock.createReviewFn = func(eventID uuid.UUID, req dto.CreateEventReviewRequest) (*dto.EventReviewResponse, error) {
+					return &dto.EventReviewResponse{ID: uuid.NewString(), EventID: eventID.String(), UserID: testAuthSub, Rating: req.Rating, Comment: req.Comment}, nil
+				}
 			}
 
 			h := NewEventHandler(tt.mock, zap.NewNop())
