@@ -21,6 +21,7 @@ type CreateEventRequest struct {
 	AgeRating            *string    `json:"age_rating"`
 	ReleaseDate          *time.Time `json:"release_date"`
 	Language             *string    `json:"language"`
+	TrailerURL           *string    `json:"trailer_url"`
 	MaxTicketsPerBooking *int       `json:"max_tickets_per_booking"`
 }
 
@@ -42,6 +43,7 @@ type UpdateEventRequest struct {
 	AgeRating            *string    `json:"age_rating"`
 	ReleaseDate          *time.Time `json:"release_date"`
 	Language             *string    `json:"language"`
+	TrailerURL           *string    `json:"trailer_url"`
 	MaxTicketsPerBooking *int       `json:"max_tickets_per_booking"`
 }
 

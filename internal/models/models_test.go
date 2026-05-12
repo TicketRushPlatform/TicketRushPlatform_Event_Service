@@ -39,6 +39,7 @@ func TestEventToDTO(t *testing.T) {
 	director := "Nolan"
 	rating := "PG-13"
 	language := "EN"
+	trailerURL := "https://www.youtube.com/embed/example"
 	release := now.Add(-48 * time.Hour)
 
 	e := Event{
@@ -55,10 +56,14 @@ func TestEventToDTO(t *testing.T) {
 		AgeRating:       &rating,
 		ReleaseDate:     &release,
 		Language:        &language,
+		TrailerURL:      &trailerURL,
 	}
 
 	dto := e.ToDTO()
 	if dto.ID == "" || dto.Name != e.Name || dto.EventType != string(EventTypeMovie) {
 		t.Fatalf("unexpected dto mapping: %+v", dto)
+	}
+	if dto.TrailerURL == nil || *dto.TrailerURL != trailerURL {
+		t.Fatalf("expected trailer URL to be mapped, got %+v", dto.TrailerURL)
 	}
 }

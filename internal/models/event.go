@@ -36,6 +36,7 @@ type Event struct {
 	AgeRating   *string    `gorm:"type:varchar(20)"`
 	ReleaseDate *time.Time `gorm:"type:timestamptz"`
 	Language    *string    `gorm:"type:varchar(50)"`
+	TrailerURL  *string    `gorm:"type:text"`
 
 	MaxTicketsPerBooking *int `gorm:"type:int"`
 }
@@ -61,6 +62,7 @@ func (e *Event) ToDTO() *dto.EventResponse {
 		AgeRating:            e.AgeRating,
 		ReleaseDate:          e.ReleaseDate,
 		Language:             e.Language,
+		TrailerURL:           e.TrailerURL,
 		MaxTicketsPerBooking: e.MaxTicketsPerBooking,
 		CreatedAt:            e.CreatedAt,
 		UpdatedAt:            e.UpdatedAt,

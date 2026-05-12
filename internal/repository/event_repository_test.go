@@ -48,6 +48,7 @@ func setupEventRepoMockDB(t *testing.T) (EventRepository, sqlmock.Sqlmock) {
 
 func TestEventRepository_CRUD(t *testing.T) {
 	repo := setupEventRepo(t)
+	trailerURL := "https://www.youtube.com/embed/example"
 
 	createReq := dto.CreateEventRequest{
 		CreatorID:       uuid.NewString(),
@@ -55,6 +56,7 @@ func TestEventRepository_CRUD(t *testing.T) {
 		Description:     "Movie",
 		DurationMinutes: 120,
 		EventType:       "MOVIE",
+		TrailerURL:      &trailerURL,
 	}
 
 	created, err := repo.Create(createReq)
@@ -68,6 +70,9 @@ func TestEventRepository_CRUD(t *testing.T) {
 	}
 	if got.Name != createReq.Name {
 		t.Fatalf("GetByID() wrong data")
+	}
+	if got.TrailerURL == nil || *got.TrailerURL != trailerURL {
+		t.Fatalf("GetByID() expected trailer URL to be persisted, got %+v", got.TrailerURL)
 	}
 
 	events, total, err := repo.List(dto.ListEventsQuery{

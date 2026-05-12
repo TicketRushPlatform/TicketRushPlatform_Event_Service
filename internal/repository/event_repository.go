@@ -63,6 +63,7 @@ func (r *eventRepository) Create(req dto.CreateEventRequest) (*models.Event, err
 		AgeRating:            req.AgeRating,
 		ReleaseDate:          req.ReleaseDate,
 		Language:             req.Language,
+		TrailerURL:           req.TrailerURL,
 		MaxTicketsPerBooking: req.MaxTicketsPerBooking,
 	}
 
@@ -139,6 +140,7 @@ func (r *eventRepository) Update(eventID uuid.UUID, req dto.UpdateEventRequest) 
 		"age_rating":              req.AgeRating,
 		"release_date":            req.ReleaseDate,
 		"language":                req.Language,
+		"trailer_url":             req.TrailerURL,
 		"max_tickets_per_booking": req.MaxTicketsPerBooking,
 	}
 
