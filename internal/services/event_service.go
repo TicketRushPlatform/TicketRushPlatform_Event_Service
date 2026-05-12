@@ -18,6 +18,8 @@ type EventService interface {
 	ReplaceShowtimesByEvent(eventID uuid.UUID, showtimes []dto.UpsertShowtimeRequest) ([]dto.ShowtimeResponse, error)
 	UpdateEvent(eventID uuid.UUID, req dto.UpdateEventRequest) (*dto.EventResponse, error)
 	DeleteEvent(eventID uuid.UUID) error
+	ListSeatMaps() ([]dto.SeatMapResponse, error)
+	CreateSeatMap(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error)
 }
 
 type eventService struct {
@@ -106,4 +108,14 @@ func (s *eventService) UpdateEvent(eventID uuid.UUID, req dto.UpdateEventRequest
 func (s *eventService) DeleteEvent(eventID uuid.UUID) error {
 	s.logger.Info("deleting event", zap.String("event_id", eventID.String()))
 	return s.repository.Delete(eventID)
+}
+
+func (s *eventService) ListSeatMaps() ([]dto.SeatMapResponse, error) {
+	s.logger.Debug("listing seat maps")
+	return s.repository.ListSeatMaps()
+}
+
+func (s *eventService) CreateSeatMap(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error) {
+	s.logger.Info("creating seat map", zap.String("name", req.Name), zap.Int("seats", len(req.Seats)))
+	return s.repository.CreateSeatMap(req)
 }

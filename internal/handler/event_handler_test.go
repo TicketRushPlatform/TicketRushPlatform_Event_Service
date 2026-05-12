@@ -216,6 +216,8 @@ type eventServiceMock struct {
 	listFn             func(query dto.ListEventsQuery) ([]dto.EventResponse, int64, int, error)
 	updateFn           func(eventID uuid.UUID, req dto.UpdateEventRequest) (*dto.EventResponse, error)
 	deleteFn           func(eventID uuid.UUID) error
+	listSeatMapsFn     func() ([]dto.SeatMapResponse, error)
+	createSeatMapFn    func(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error)
 }
 
 func (m *eventServiceMock) CreateEvent(req dto.CreateEventRequest) (*dto.EventResponse, error) {
@@ -249,6 +251,18 @@ func (m *eventServiceMock) UpdateEvent(eventID uuid.UUID, req dto.UpdateEventReq
 	return m.updateFn(eventID, req)
 }
 func (m *eventServiceMock) DeleteEvent(eventID uuid.UUID) error { return m.deleteFn(eventID) }
+func (m *eventServiceMock) ListSeatMaps() ([]dto.SeatMapResponse, error) {
+	if m.listSeatMapsFn == nil {
+		return []dto.SeatMapResponse{}, nil
+	}
+	return m.listSeatMapsFn()
+}
+func (m *eventServiceMock) CreateSeatMap(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error) {
+	if m.createSeatMapFn == nil {
+		return &dto.SeatMapResponse{}, nil
+	}
+	return m.createSeatMapFn(req)
+}
 
 func TestEventHandlerRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -277,6 +291,24 @@ func TestEventHandlerRoutes(t *testing.T) {
 		},
 		updateFn: func(eventID uuid.UUID, req dto.UpdateEventRequest) (*dto.EventResponse, error) { return res, nil },
 		deleteFn: func(eventID uuid.UUID) error { return nil },
+		listSeatMapsFn: func() ([]dto.SeatMapResponse, error) {
+			return []dto.SeatMapResponse{{
+				ID:           uuid.NewString(),
+				Name:         "Map A",
+				VenueName:    "Venue A",
+				VenueAddress: "Address A",
+				Seats: []dto.SeatMapSeatResponse{{
+					ID:        uuid.NewString(),
+					Row:       "A",
+					Number:    1,
+					SeatClass: "VIP",
+					Price:     250000,
+				}},
+			}}, nil
+		},
+		createSeatMapFn: func(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error) {
+			return &dto.SeatMapResponse{ID: uuid.NewString(), Name: req.Name, VenueName: req.Venue, VenueAddress: req.Address}, nil
+		},
 	}
 
 	h := NewEventHandler(mock, zap.NewNop())
@@ -307,6 +339,18 @@ func TestEventHandlerRoutes(t *testing.T) {
 		{"replace showtimes", http.MethodPut, "/api/v1/events/" + id.String() + "/showtimes", []dto.UpsertShowtimeRequest{{Venue: "Venue A", Address: "Address A", StartTime: now, EndTime: now.Add(time.Hour), SeatMapName: "Map A"}}, http.StatusOK},
 		{"update", http.MethodPut, "/api/v1/events/" + id.String(), dto.UpdateEventRequest{Name: "U", DurationMinutes: 90, EventType: "EVENT"}, http.StatusOK},
 		{"delete", http.MethodDelete, "/api/v1/events/" + id.String(), nil, http.StatusOK},
+		{"list seat maps", http.MethodGet, "/api/v1/seat-maps", nil, http.StatusOK},
+		{"create seat map", http.MethodPost, "/api/v1/seat-maps", dto.CreateSeatMapRequest{
+			Name:    "Map B",
+			Venue:   "Venue B",
+			Address: "Address B",
+			Seats: []dto.CreateSeatMapSeatDTO{{
+				Row:       "A",
+				Number:    1,
+				SeatClass: "STANDARD",
+				Price:     180000,
+			}},
+		}, http.StatusCreated},
 	}
 
 	for _, tt := range tests {
@@ -476,6 +520,44 @@ func TestEventHandlerErrorPaths(t *testing.T) {
 				},
 			},
 			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:   "list seat maps service error",
+			method: http.MethodGet, path: "/api/v1/seat-maps",
+			mock: &eventServiceMock{
+				listSeatMapsFn: func() ([]dto.SeatMapResponse, error) {
+					return nil, apperror.NewInternal("list seat maps failed", errors.New("db"))
+				},
+			},
+			wantStatus: http.StatusInternalServerError,
+		},
+		{
+			name:   "create seat map invalid body",
+			method: http.MethodPost, path: "/api/v1/seat-maps",
+			body:       map[string]any{"name": "Map A"},
+			mock:       &eventServiceMock{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:   "create seat map service error",
+			method: http.MethodPost, path: "/api/v1/seat-maps",
+			body: dto.CreateSeatMapRequest{
+				Name:    "Map A",
+				Venue:   "Venue A",
+				Address: "Address A",
+				Seats: []dto.CreateSeatMapSeatDTO{{
+					Row:       "A",
+					Number:    1,
+					SeatClass: "VIP",
+					Price:     250000,
+				}},
+			},
+			mock: &eventServiceMock{
+				createSeatMapFn: func(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error) {
+					return nil, errors.New("db")
+				},
+			},
+			wantStatus: http.StatusInternalServerError,
 		},
 	}
 

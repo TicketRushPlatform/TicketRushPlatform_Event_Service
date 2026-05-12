@@ -41,6 +41,12 @@ func (h *EventHandler) RegisterRoutes(rg *gin.RouterGroup, authMiddleware gin.Ha
 	{
 		showtimes.GET("/:id", h.GetShowtime)
 	}
+
+	seatMaps := rg.Group("/seat-maps")
+	{
+		seatMaps.GET("", h.ListSeatMaps)
+		seatMaps.POST("", authMiddleware, h.CreateSeatMap)
+	}
 }
 
 // CreateEvent godoc
@@ -375,5 +381,36 @@ func (h *EventHandler) handleError(c *gin.Context, err error) {
 	c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
 		Code:    http.StatusInternalServerError,
 		Message: "internal server error",
+	})
+}
+
+func (h *EventHandler) ListSeatMaps(c *gin.Context) {
+	seatMaps, err := h.service.ListSeatMaps()
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, dto.SuccessResponse{Data: seatMaps})
+}
+
+func (h *EventHandler) CreateSeatMap(c *gin.Context) {
+	var req dto.CreateSeatMapRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: "invalid request: " + err.Error(),
+		})
+		return
+	}
+
+	seatMap, err := h.service.CreateSeatMap(req)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.SuccessResponse{
+		Message: "seat map created successfully",
+		Data:    seatMap,
 	})
 }
