@@ -331,6 +331,82 @@ func TestEventService_AllMethods(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "seat map methods success and error",
+			run: func(t *testing.T, svc EventService, mock *eventRepoMock) {
+				seatMap := dto.SeatMapResponse{
+					ID:           uuid.NewString(),
+					Name:         "Main hall",
+					VenueName:    "Venue A",
+					VenueAddress: "Addr A",
+					Seats: []dto.SeatMapSeatResponse{{
+						ID:        uuid.NewString(),
+						Row:       "A",
+						Number:    1,
+						SeatClass: "VIP",
+						Price:     250000,
+					}},
+				}
+
+				mock.listSeatMapsFn = func() ([]dto.SeatMapResponse, error) {
+					return []dto.SeatMapResponse{seatMap}, nil
+				}
+				listed, err := svc.ListSeatMaps()
+				if err != nil {
+					t.Fatalf("unexpected list error: %v", err)
+				}
+				if len(listed) != 1 || listed[0].Name != seatMap.Name {
+					t.Fatalf("unexpected list seat maps response: %+v", listed)
+				}
+
+				mock.listSeatMapsFn = func() ([]dto.SeatMapResponse, error) {
+					return nil, repoErr
+				}
+				if _, err := svc.ListSeatMaps(); !errors.Is(err, repoErr) {
+					t.Fatalf("expected %v, got %v", repoErr, err)
+				}
+
+				mock.createSeatMapFn = func(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error) {
+					out := seatMap
+					out.Name = req.Name
+					return &out, nil
+				}
+				created, err := svc.CreateSeatMap(dto.CreateSeatMapRequest{
+					Name:    "Balcony",
+					Venue:   "Venue B",
+					Address: "Addr B",
+					Seats: []dto.CreateSeatMapSeatDTO{{
+						Row:       "B",
+						Number:    1,
+						SeatClass: "STANDARD",
+						Price:     180000,
+					}},
+				})
+				if err != nil {
+					t.Fatalf("unexpected create error: %v", err)
+				}
+				if created.Name != "Balcony" {
+					t.Fatalf("unexpected create seat map response: %+v", created)
+				}
+
+				mock.createSeatMapFn = func(req dto.CreateSeatMapRequest) (*dto.SeatMapResponse, error) {
+					return nil, repoErr
+				}
+				if _, err := svc.CreateSeatMap(dto.CreateSeatMapRequest{
+					Name:    "Fail",
+					Venue:   "Venue C",
+					Address: "Addr C",
+					Seats: []dto.CreateSeatMapSeatDTO{{
+						Row:       "C",
+						Number:    1,
+						SeatClass: "VIP",
+						Price:     250000,
+					}},
+				}); !errors.Is(err, repoErr) {
+					t.Fatalf("expected %v, got %v", repoErr, err)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
