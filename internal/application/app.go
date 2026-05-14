@@ -8,6 +8,7 @@ import (
 	"event_service/internal/infrastructure/database"
 	"event_service/internal/infrastructure/logger"
 	"event_service/internal/middleware"
+	"event_service/internal/observability"
 	"event_service/internal/repository"
 	"event_service/internal/server"
 	"event_service/internal/services"
@@ -52,9 +53,12 @@ func NewApp(cfg config.Config) (*App, error) {
 	eventHandler := handler.NewEventHandler(eventService, zapLogger)
 
 	router := srv.Router()
+	metrics := observability.NewMetrics()
 	router.Use(middleware.CORS())
 	router.Use(middleware.RequestID())
+	router.Use(metrics.Middleware())
 	router.Use(middleware.RequestLogger(zapLogger))
+	router.GET("/metrics", metrics.Handler())
 
 	authMw := middleware.RequireAuth(middleware.AuthConfig{
 		JWTSecret:    cfg.Auth.JWTSecret,
