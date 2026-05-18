@@ -278,7 +278,16 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
+                "address": {
+                    "type": "string"
+                },
                 "age_rating": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "city": {
                     "type": "string"
                 },
                 "description": {
@@ -298,13 +307,37 @@ const docTemplate = `{
                         "MOVIE"
                     ]
                 },
+                "image_url": {
+                    "type": "string"
+                },
+                "is_flash_sale": {
+                    "type": "boolean"
+                },
                 "language": {
                     "type": "string"
+                },
+                "max_tickets_per_booking": {
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string"
                 },
+                "organizer": {
+                    "type": "string"
+                },
                 "release_date": {
+                    "type": "string"
+                },
+                "sale_opens_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "trailer_url": {
+                    "type": "string"
+                },
+                "venue": {
                     "type": "string"
                 }
             }
@@ -355,7 +388,16 @@ const docTemplate = `{
                 "name"
             ],
             "properties": {
+                "address": {
+                    "type": "string"
+                },
                 "age_rating": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "city": {
                     "type": "string"
                 },
                 "description": {
@@ -375,13 +417,37 @@ const docTemplate = `{
                         "MOVIE"
                     ]
                 },
+                "image_url": {
+                    "type": "string"
+                },
+                "is_flash_sale": {
+                    "type": "boolean"
+                },
                 "language": {
                     "type": "string"
+                },
+                "max_tickets_per_booking": {
+                    "type": "integer"
                 },
                 "name": {
                     "type": "string"
                 },
+                "organizer": {
+                    "type": "string"
+                },
                 "release_date": {
+                    "type": "string"
+                },
+                "sale_opens_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "trailer_url": {
+                    "type": "string"
+                },
+                "venue": {
                     "type": "string"
                 }
             }

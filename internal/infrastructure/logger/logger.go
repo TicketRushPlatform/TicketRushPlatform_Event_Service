@@ -32,18 +32,11 @@ func NewLogger(cfg Config) (*zap.Logger, error) {
 	}
 
 	encoder := zapcore.NewJSONEncoder(encoderConfig)
+	core := zapcore.NewCore(encoder, zapcore.AddSync(os.Stdout), level)
 
-	core := zapcore.NewCore(
-		encoder,
-		zapcore.AddSync(os.Stdout),
-		level,
-	)
-
-	zapLogger := zap.New(
+	return zap.New(
 		core,
 		zap.AddCaller(),
 		zap.AddStacktrace(zapcore.ErrorLevel),
-	)
-
-	return zapLogger, nil
+	), nil
 }
