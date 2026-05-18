@@ -2,7 +2,13 @@ basePath: /api/v1
 definitions:
   dto.CreateEventRequest:
     properties:
+      address:
+        type: string
       age_rating:
+        type: string
+      category:
+        type: string
+      city:
         type: string
       description:
         type: string
@@ -16,11 +22,27 @@ definitions:
         - EVENT
         - MOVIE
         type: string
+      image_url:
+        type: string
+      is_flash_sale:
+        type: boolean
       language:
         type: string
+      max_tickets_per_booking:
+        type: integer
       name:
         type: string
+      organizer:
+        type: string
       release_date:
+        type: string
+      sale_opens_at:
+        type: string
+      status:
+        type: string
+      trailer_url:
+        type: string
+      venue:
         type: string
     required:
     - duration_minutes
@@ -54,7 +76,13 @@ definitions:
     type: object
   dto.UpdateEventRequest:
     properties:
+      address:
+        type: string
       age_rating:
+        type: string
+      category:
+        type: string
+      city:
         type: string
       description:
         type: string
@@ -68,11 +96,27 @@ definitions:
         - EVENT
         - MOVIE
         type: string
+      image_url:
+        type: string
+      is_flash_sale:
+        type: boolean
       language:
         type: string
+      max_tickets_per_booking:
+        type: integer
       name:
         type: string
+      organizer:
+        type: string
       release_date:
+        type: string
+      sale_opens_at:
+        type: string
+      status:
+        type: string
+      trailer_url:
+        type: string
+      venue:
         type: string
     required:
     - duration_minutes

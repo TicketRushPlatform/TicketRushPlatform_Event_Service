@@ -17,6 +17,7 @@ import (
 
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.elastic.co/apm/module/apmgin/v2"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -56,6 +57,7 @@ func NewApp(cfg config.Config) (*App, error) {
 	metrics := observability.NewMetrics()
 	router.Use(middleware.CORS())
 	router.Use(middleware.RequestID())
+	router.Use(apmgin.Middleware(router))
 	router.Use(metrics.Middleware())
 	router.Use(middleware.RequestLogger(zapLogger))
 	router.GET("/metrics", metrics.Handler())
